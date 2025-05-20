@@ -4,6 +4,7 @@
  */
 import { google } from 'googleapis';
 import { config } from '../config/index.js';
+import db from '../db/index.js';
 
 const { clientId, clientSecret, redirectUri, refreshToken } = config.google;
 
@@ -12,7 +13,7 @@ oAuth2Client.setCredentials({ refresh_token: refreshToken });
 
 const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
 
-export async function insertEvent(event) {
+export async function insertEvent(event: any) {
   const res = await calendar.events.insert({
     calendarId: 'primary',
     requestBody: event,
@@ -20,7 +21,7 @@ export async function insertEvent(event) {
   return res.data;
 }
 
-export async function updateEvent(eventId, event) {
+export async function updateEvent(eventId: string, event: any) {
   const res = await calendar.events.update({
     calendarId: 'primary',
     eventId,
@@ -29,14 +30,14 @@ export async function updateEvent(eventId, event) {
   return res.data;
 }
 
-export async function deleteEvent(eventId) {
+export async function deleteEvent(eventId: string) {
   await calendar.events.delete({
     calendarId: 'primary',
     eventId,
   });
 }
 
-export async function listEvents(timeMin, timeMax) {
+export async function listEvents(timeMin: string, timeMax: string): Promise<any[]> {
   const res = await calendar.events.list({
     calendarId: 'primary',
     timeMin,
@@ -44,7 +45,7 @@ export async function listEvents(timeMin, timeMax) {
     singleEvents: true,
     orderBy: 'startTime',
   });
-  return res.data.items;
+  return res.data.items || [];
 }
 
 export async function watchEvents() {
@@ -57,6 +58,7 @@ export async function syncFromGCal() {
   const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString();
   const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30).toISOString();
   const events = await listEvents(timeMin, timeMax);
+  if (!events) return;
   for (const ev of events) {
     if (!ev.id || !ev.summary) continue;
     // Nếu chưa có trong DB thì insert
