@@ -21,7 +21,7 @@
     "node-fetch": "^2.7.0",
     "pino": "^8.0.0",
     "uuid": "^11.1.0",
-    "zca-js": "^1.6.0"
+    "zca-js": "^2.0.0-beta.19"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

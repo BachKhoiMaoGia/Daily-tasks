@@ -16,7 +16,14 @@ import db from './db/index.js';
 import { syncFromGCal } from './gcal/index.js';
 
 async function main() {
-  await login();
+  logger.info('[Zalo] Bắt đầu đăng nhập Zalo...');
+  try {
+    await login();
+    logger.info('[Zalo] Đã gọi xong hàm login(). Nếu có QR, hãy kiểm tra terminal để quét.');
+  } catch (err) {
+    logger.error('[Zalo] Lỗi khi đăng nhập:', err);
+    throw err;
+  }
   onMessage(async (msg) => {
     try {
       let plainText = msg.text || '';
