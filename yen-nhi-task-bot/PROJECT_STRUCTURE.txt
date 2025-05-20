@@ -1,0 +1,23 @@
+yen-nhi-task-bot/
+  src/
+    audio/
+      audioDownloader.ts
+      convert.ts
+      stt.ts
+    config/
+    db/
+    gcal/
+    zalo/
+    parser/
+    scheduler/
+    webhooks/
+    utils/
+    index.ts
+  test/
+  Dockerfile
+  docker-compose.yml
+  .env.example
+  README.md
+  tsconfig.json
+  .eslintrc.cjs
+  .prettierrc
