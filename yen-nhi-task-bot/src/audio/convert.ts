@@ -18,10 +18,14 @@ const FFMPEG_PATH = process.env.FFMPEG_PATH || '/usr/bin/ffmpeg';
 export async function convertToWav(inputBuf: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(FFMPEG_PATH, [
-      '-i', 'pipe:0',
-      '-ar', '16000',
-      '-ac', '1',
-      '-f', 'wav',
+      '-i',
+      'pipe:0',
+      '-ar',
+      '16000',
+      '-ac',
+      '1',
+      '-f',
+      'wav',
       'pipe:1',
     ]);
     const chunks: Buffer[] = [];

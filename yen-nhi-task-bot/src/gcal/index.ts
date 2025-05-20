@@ -47,6 +47,28 @@ export async function listEvents(timeMin, timeMax) {
   return res.data.items;
 }
 
-export async function watchEvents(webhookUrl) {
+export async function watchEvents() {
   // ...Google push notification setup (TTL 7 days)...
+}
+
+export async function syncFromGCal() {
+  // Lấy các event từ Google Calendar, cập nhật lại DB nếu có event mới/sửa/xóa
+  const now = new Date();
+  const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString();
+  const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30).toISOString();
+  const events = await listEvents(timeMin, timeMax);
+  for (const ev of events) {
+    if (!ev.id || !ev.summary) continue;
+    // Nếu chưa có trong DB thì insert
+    const row = db.prepare('SELECT * FROM tasks WHERE gcal_event_id = ?').get(ev.id);
+    if (!row) {
+      db.prepare('INSERT INTO tasks (content, due_date, due_time, gcal_event_id, done) VALUES (?, ?, ?, ?, 0)')
+        .run(ev.summary, ev.start?.date || ev.start?.dateTime?.slice(0, 10), ev.start?.dateTime?.slice(11, 16), ev.id);
+    } else {
+      // Nếu event đã bị xóa trên Google Calendar thì xóa khỏi DB
+      if (ev.status === 'cancelled') {
+        db.prepare('DELETE FROM tasks WHERE gcal_event_id = ?').run(ev.id);
+      }
+    }
+  }
 }
