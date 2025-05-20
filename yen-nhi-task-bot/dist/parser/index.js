@@ -1,3 +1,7 @@
+/**
+ * parser/index.ts
+ * Parse plainText (from STT or text) to command object.
+ */
 const LIST_CMD = /^\/list$/i;
 const STATS_CMD = /^\/stats$/i;
 const CMD_REGEX = /^\/(new|list|done|delete|help|stats)(?:\s+(.+))?/i;
