@@ -3,16 +3,17 @@ FROM node:18-bullseye
 
 WORKDIR /app
 
+# Cài build tools trước (cực quan trọng cho native module)
+RUN apt-get update && apt-get install -y build-essential python3
+
 COPY package*.json ./
 RUN npm ci --omit=dev
-
-RUN npm rebuild better-sqlite3
 
 COPY . .
 
 RUN npm run build
 
-# Install ffmpeg
+# Cài ffmpeg sau cùng
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
