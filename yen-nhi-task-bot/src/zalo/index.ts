@@ -46,7 +46,7 @@ export async function login() {
         try {
           const c = await zaloClient.getCookie();
           if (typeof c === 'string') cookie = c;
-        } catch {}
+        } catch (e) {/* bỏ qua lỗi lấy cookie */}
       }
       if (cookie) {
         try {

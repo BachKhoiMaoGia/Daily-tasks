@@ -2,7 +2,6 @@
  * parser/index.ts
  * Parse plainText (from STT or text) to command object.
  */
-import { config } from '../config/index.js';
 
 const LIST_CMD = /^\/list$/i;
 const STATS_CMD = /^\/stats$/i;
