@@ -7,7 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y build-essential python3
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 COPY . .
 
