@@ -7,11 +7,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y build-essential python3
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 COPY . .
 
-RUN npm run build
+RUN npx tsc
+
+# Xóa devDependencies để giảm size image
+RUN npm prune --omit=dev
 
 # Cài ffmpeg sau cùng
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
