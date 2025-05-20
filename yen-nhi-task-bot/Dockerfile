@@ -6,6 +6,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
+RUN npm rebuild better-sqlite3
+
 COPY . .
 
 RUN npm run build
