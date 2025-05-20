@@ -178,6 +178,14 @@ async function main() {
         await sendMessage(config.bossZaloId || '', helpMsg);
         return;
       }
+      if (cmd.cmd === 'me') {
+        if (msg.senderId) {
+          await sendMessage(msg.senderId, `Zalo userId của bạn là: ${msg.senderId}`);
+        } else {
+          await sendMessage(config.bossZaloId || '', 'Không lấy được userId.');
+        }
+        return;
+      }
       // TODO: handle command, update DB, sync GCal, reply
       await sendMessage(config.bossZaloId || '', `Đã nhận lệnh: ${cmd.cmd}`);
     } catch (err) {
