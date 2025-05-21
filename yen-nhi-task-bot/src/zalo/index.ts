@@ -36,11 +36,18 @@ export async function login() {
       }
       // Lưu cookies object array vào file JSON
       if (api && api.cookies) {
-        try {
-          fs.writeFileSync(config.zaloCookiePath, JSON.stringify(api.cookies), 'utf8');
-          console.log(`[Zalo] Đã lưu cookies object array vào ${config.zaloCookiePath}`);
-        } catch (err) {
-          console.error('[Zalo] Lỗi khi lưu cookies:', err);
+        // Kiểm tra cookies có phải array không
+        if (Array.isArray(api.cookies)) {
+          try {
+            fs.writeFileSync(config.zaloCookiePath, JSON.stringify(api.cookies, null, 2), 'utf8');
+            console.log(`[Zalo] Đã lưu cookies object array vào ${config.zaloCookiePath} (length: ${api.cookies.length})`);
+          } catch (err) {
+            console.error('[Zalo] Lỗi khi lưu cookies:', err);
+            throw err;
+          }
+        } else {
+          console.error('[Zalo] Cookies không phải array! Không lưu.');
+          throw new Error('Cookies không phải array!');
         }
       } else {
         console.log('[Zalo] Không tìm thấy cookies để lưu. Đăng nhập thất bại!');
@@ -53,10 +60,30 @@ export async function login() {
   } else {
     // Nếu đã có cookies object array, luôn đọc và truyền vào client
     try {
-      const cookiesArr = JSON.parse(fs.readFileSync(config.zaloCookiePath, 'utf8'));
+      const cookiesRaw = fs.readFileSync(config.zaloCookiePath, 'utf8');
+      let cookiesArr;
+      try {
+        cookiesArr = JSON.parse(cookiesRaw);
+      } catch (err) {
+        console.error('[Zalo] Lỗi parse cookies JSON:', err);
+        fs.unlinkSync(config.zaloCookiePath);
+        throw new Error('File cookies bị lỗi, đã xóa. Hãy quét lại QR.');
+      }
+      if (!Array.isArray(cookiesArr)) {
+        console.error('[Zalo] File cookies không phải array! Đã xóa.');
+        fs.unlinkSync(config.zaloCookiePath);
+        throw new Error('File cookies không hợp lệ, đã xóa. Hãy quét lại QR.');
+      }
+      console.log(`[Zalo] Đọc cookies từ file (${config.zaloCookiePath}), length: ${cookiesArr.length}`);
       if (typeof zaloClient.loginWithCookies === 'function') {
-        await zaloClient.loginWithCookies({ cookies: cookiesArr });
-        console.log('[Zalo] Đã đăng nhập bằng cookies (loginWithCookies).');
+        try {
+          await zaloClient.loginWithCookies({ cookies: cookiesArr });
+          console.log('[Zalo] Đã đăng nhập bằng cookies (loginWithCookies).');
+        } catch (err) {
+          console.error('[Zalo] Lỗi loginWithCookies:', err);
+          fs.unlinkSync(config.zaloCookiePath);
+          throw new Error('Đăng nhập Zalo bằng cookies thất bại. Đã xóa cookies, hãy quét lại QR.');
+        }
       } else if ('cookies' in zaloClient) {
         zaloClient.cookies = cookiesArr;
         console.log('[Zalo] Đã gán cookies trực tiếp vào client.');
@@ -65,7 +92,7 @@ export async function login() {
       }
     } catch (err) {
       console.error('[Zalo] Lỗi khi đăng nhập bằng cookies:', err);
-      throw new Error('Đăng nhập Zalo bằng cookies thất bại. Hãy xóa cookies và quét lại QR.');
+      throw err;
     }
   }
 }

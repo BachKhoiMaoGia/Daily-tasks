@@ -33,39 +33,19 @@ export async function login() {
             else {
                 console.log('[Zalo] Đã tạo file qr.png, hãy mở file này để quét QR.');
             }
-            // Lấy đúng cookie string từ api.cookie nếu là string, hoặc lấy từng trường cần thiết nếu là object
-            let cookie = '';
-            if (typeof api?.cookie === 'string') {
-                cookie = api.cookie;
-            }
-            else if (api?.cookie && typeof api.cookie === 'object') {
-                // Chỉ lấy các trường cookie Zalo cần: zpsid, zpw_sek, _zlang, app.event.zalo.me
-                const keys = ['zpsid', 'zpw_sek', '_zlang', 'app.event.zalo.me'];
-                cookie = keys
-                    .map((k) => (api.cookie[k] ? `${k}=${api.cookie[k]}` : ''))
-                    .filter(Boolean)
-                    .join('; ');
-            }
-            if (!cookie && typeof zaloClient.getCookie === 'function') {
+            // Lưu cookies object array vào file JSON
+            if (api && api.cookies) {
                 try {
-                    const c = await zaloClient.getCookie();
-                    if (typeof c === 'string')
-                        cookie = c;
-                }
-                catch (e) { /* bỏ qua lỗi lấy cookie */ }
-            }
-            if (cookie) {
-                try {
-                    fs.writeFileSync(config.zaloCookiePath, cookie, 'utf8');
-                    console.log(`[Zalo] Đã lưu cookie mới vào ${config.zaloCookiePath}`);
+                    fs.writeFileSync(config.zaloCookiePath, JSON.stringify(api.cookies), 'utf8');
+                    console.log(`[Zalo] Đã lưu cookies object array vào ${config.zaloCookiePath}`);
                 }
                 catch (err) {
-                    console.error('[Zalo] Lỗi khi lưu cookie:', err);
+                    console.error('[Zalo] Lỗi khi lưu cookies:', err);
                 }
             }
             else {
-                console.log('[Zalo] Không tìm thấy cookie để lưu. Đăng nhập thất bại!');
-                throw new Error('Không lấy được cookie sau khi quét QR.');
+                console.log('[Zalo] Không tìm thấy cookies để lưu. Đăng nhập thất bại!');
+                throw new Error('Không lấy được cookies sau khi quét QR.');
             }
         }
         else {
@@ -74,28 +54,24 @@ export async function login() {
         }
     }
     else {
-        // Nếu đã có cookie, luôn đọc cookie string và set vào client
+        // Nếu đã có cookies object array, luôn đọc và truyền vào client
         try {
-            const cookieStr = fs.readFileSync(config.zaloCookiePath, 'utf8');
-            if (typeof zaloClient.loginWithCookie === 'function') {
-                await zaloClient.loginWithCookie({ cookie: cookieStr });
-                console.log('[Zalo] Đã đăng nhập bằng cookie (loginWithCookie).');
+            const cookiesArr = JSON.parse(fs.readFileSync(config.zaloCookiePath, 'utf8'));
+            if (typeof zaloClient.loginWithCookies === 'function') {
+                await zaloClient.loginWithCookies({ cookies: cookiesArr });
+                console.log('[Zalo] Đã đăng nhập bằng cookies (loginWithCookies).');
             }
-            else if (typeof zaloClient.setCookie === 'function') {
-                zaloClient.setCookie(cookieStr);
-                console.log('[Zalo] Đã set cookie trực tiếp cho client (setCookie).');
-            }
-            else if ('cookie' in zaloClient) {
-                zaloClient.cookie = cookieStr;
-                console.log('[Zalo] Đã gán cookie trực tiếp vào client.');
+            else if ('cookies' in zaloClient) {
+                zaloClient.cookies = cookiesArr;
+                console.log('[Zalo] Đã gán cookies trực tiếp vào client.');
             }
             else {
-                console.warn('[Zalo] Không có hàm loginWithCookie/setCookie, chỉ gán cookie vào client. Nếu không nhận được message, hãy kiểm tra lại thư viện zca-js.');
+                console.warn('[Zalo] Không có hàm loginWithCookies, chỉ gán cookies vào client. Nếu không nhận được message, hãy kiểm tra lại thư viện zca-js.');
             }
         }
         catch (err) {
-            console.error('[Zalo] Lỗi khi đăng nhập bằng cookie:', err);
-            throw new Error('Đăng nhập Zalo bằng cookie thất bại. Hãy xóa cookie và quét lại QR.');
+            console.error('[Zalo] Lỗi khi đăng nhập bằng cookies:', err);
+            throw new Error('Đăng nhập Zalo bằng cookies thất bại. Hãy xóa cookies và quét lại QR.');
         }
     }
 }
