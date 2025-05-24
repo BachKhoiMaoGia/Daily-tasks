@@ -2,8 +2,7 @@
     "name": "yen-nhi-task-bot",
     "version": "1.0.0",
     "type": "module",
-    "main": "dist/index.js",
-    "scripts": {
+    "main": "dist/index.js",    "scripts": {
         "build": "tsc",
         "start": "node dist/index.js",
         "dev": "ts-node src/index.ts",
@@ -11,7 +10,8 @@
         "format": "prettier --write .",
         "test": "vitest run --coverage",
         "validate-env": "node validate-env.js",
-        "prestart": "npm run validate-env"
+        "prestart": "npm run validate-env",
+        "postinstall": "npm rebuild better-sqlite3"
     },
     "dependencies": {
         "@googleapis/calendar": "^4.0.0",

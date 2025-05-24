@@ -1,0 +1,94 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.coverage/
+
+# Environment variables - BẢO MẬT
+.env
+.env.*
+!.env.example
+*.env
+
+# API Keys và secrets - BẢO MẬT  
+*api_key*
+*secret*
+*token*
+*credential*
+
+# Security documentation - BẢO MẬT
+SECURITY.md
+RENDER_ENV_SETUP.md
+COMPLETION_REPORT.md
+validate-env.js
+
+# Zalo cookies - BẢO MẬT
+.cookies.json
+.cookies.txt
+cookies.json
+cookies.txt
+*.cookies.json
+*.cookies.txt
+
+# Audio temporary files
+tmp/
+*.tmp
+*.wav
+*.m4a
+*.opus
+audio_*
+
+# Database - có thể chứa thông tin nhạy cảm
+tasks.db
+tasks.db-*
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Build output
+dist/
+build/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Google credentials - BẢO MẬT
+credentials.json
+token.json
+google-credentials.json
+
+# QR codes - có thể chứa thông tin đăng nhập
+qr.png
+qr_*.png
+*.qr
+
+# Backup files
+*.backup
+*.bak
