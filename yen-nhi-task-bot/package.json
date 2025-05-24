@@ -10,8 +10,6 @@
         "lint": "eslint . --ext .ts",
         "format": "prettier --write .",
         "test": "vitest run --coverage",
-        "validate-env": "node validate-env.js",
-        "prestart": "npm run validate-env",
         "postinstall": "npm rebuild better-sqlite3"
     },
     "dependencies": {
