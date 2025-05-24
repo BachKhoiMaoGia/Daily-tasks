@@ -5,6 +5,7 @@
 import { Zalo } from 'zca-js';
 import fs from 'fs';
 import { config } from '../config/index.js';
+import { storeQRData, clearQR } from './qr.js';
 
 let client: any = null;
 
@@ -19,10 +20,17 @@ export async function login() {
   const zaloClient = getZaloClient();
   if (!fs.existsSync(config.zaloCookiePath)) {
     console.log('\n[Zalo] Chưa có cookie, khởi tạo đăng nhập QR...');
-    if (typeof zaloClient.loginQR === 'function') {
-      const api = await zaloClient.loginQR();
+    if (typeof zaloClient.loginQR === 'function') {      const api = await zaloClient.loginQR();
       // In toàn bộ object trả về để debug
       console.log('[Zalo][DEBUG] loginQR() result:', JSON.stringify(api, null, 2));
+      
+      // Store QR data for web display
+      if (api && api.qr) {
+        storeQRData(api.qr);
+        console.log('\n🔗 [Zalo] QR Code available at: http://your-render-app.com/qr');
+        console.log('📱 [Zalo] Open the URL above to see QR code for Zalo login');
+      }
+      
       // In ra link QR nếu có
       if (api && api.qr && api.qr.url) {
         console.log(`\n[Zalo] Link QR: ${api.qr.url}`);
@@ -37,10 +45,11 @@ export async function login() {
       // Lưu cookies object array vào file JSON
       if (api && api.cookies) {
         // Kiểm tra cookies có phải array không
-        if (Array.isArray(api.cookies)) {
-          try {
+        if (Array.isArray(api.cookies)) {          try {
             fs.writeFileSync(config.zaloCookiePath, JSON.stringify(api.cookies, null, 2), 'utf8');
             console.log(`[Zalo] Đã lưu cookies object array vào ${config.zaloCookiePath} (length: ${api.cookies.length})`);
+            // Clear QR data since login is successful
+            clearQR();
           } catch (err) {
             console.error('[Zalo] Lỗi khi lưu cookies:', err);
             throw err;

@@ -59,9 +59,19 @@ docker-compose up --build
 - Khi build xong, app sẽ chạy ở URL dạng: `https://<your-app>.onrender.com/`
 
 ### 2. Đăng nhập Zalo
-- Khi bot chạy lần đầu, kiểm tra log Render (View Logs) để lấy QR code (dạng link hoặc base64 PNG).
-- Quét QR bằng app Zalo để đăng nhập bot.
-- Cookie sẽ được lưu lại, không cần quét lại trừ khi cookie hết hạn.
+#### **🌐 QR Code trên Web (Recommended for Render):**
+1. Mở trình duyệt và truy cập: `https://your-app.onrender.com/qr`
+2. Quét QR code bằng app Zalo trên điện thoại
+3. QR code tự động refresh và có hướng dẫn chi tiết
+4. Sau khi đăng nhập thành công, QR sẽ biến mất
+
+#### **📋 Kiểm tra status:**
+- `https://your-app.onrender.com/status` - JSON status của bot
+- `https://your-app.onrender.com/qr.png` - QR image trực tiếp
+
+#### **📝 Fallback (nếu web không hoạt động):**
+- Kiểm tra log Render (View Logs) để lấy QR code dạng base64 PNG
+- Cookie sẽ được lưu lại, không cần quét lại trừ khi hết hạn
 
 ### 3. Nhắn/nhận tin ở đâu?
 - **Bạn (Boss) nhắn tin cho bot qua Zalo cá nhân** (user Zalo, không phải OA).
