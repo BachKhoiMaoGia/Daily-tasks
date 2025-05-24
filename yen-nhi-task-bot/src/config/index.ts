@@ -12,6 +12,8 @@ export const config = {
   audioTmp: process.env.AUDIO_TMP || './tmp',
   maxAudioMin: Number(process.env.MAX_AUDIO_MIN || 10),
   zaloCookiePath: process.env.ZALO_COOKIE_PATH || '.cookies.json',
+  huggingfaceApiKey: process.env.HUGGINGFACE_API_KEY,
+  huggingfaceWhisperModel: process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v3',
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,

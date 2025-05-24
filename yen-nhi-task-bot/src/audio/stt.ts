@@ -11,7 +11,7 @@ config();
 const STT_PROVIDER = process.env.STT_PROVIDER || 'whisper';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v2';
+const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v3';
 
 /**
  * Transcribe audio buffer to text.
