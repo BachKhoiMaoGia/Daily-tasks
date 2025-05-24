@@ -15,54 +15,54 @@ import path from 'path';
 const router = express.Router();
 
 function getTaskMap() {
-  const rows: any[] = db.prepare('SELECT * FROM tasks').all();
-  const map: Record<string, any> = {};
-  for (const r of rows) {
-    if (r.gcal_event_id) map[r.gcal_event_id] = r;
-  }
-  return map;
+    const rows: any[] = db.prepare('SELECT * FROM tasks').all();
+    const map: Record<string, any> = {};
+    for (const r of rows) {
+        if (r.gcal_event_id) map[r.gcal_event_id] = r;
+    }
+    return map;
 }
 
 router.post('/gcal', async (req, res) => {
-  try {
-    // Lấy snapshot trước khi sync
-    const before = getTaskMap();
-    await syncFromGCal();
-    const after = getTaskMap();
-    // So sánh diff
-    const added: string[] = [];
-    const removed: string[] = [];
-    const changed: string[] = [];
-    for (const id in after) {
-      if (!before[id]) added.push(id);
-      else if (JSON.stringify(after[id]) !== JSON.stringify(before[id])) changed.push(id);
+    try {
+        // Lấy snapshot trước khi sync
+        const before = getTaskMap();
+        await syncFromGCal();
+        const after = getTaskMap();
+        // So sánh diff
+        const added: string[] = [];
+        const removed: string[] = [];
+        const changed: string[] = [];
+        for (const id in after) {
+            if (!before[id]) added.push(id);
+            else if (JSON.stringify(after[id]) !== JSON.stringify(before[id])) changed.push(id);
+        }
+        for (const id in before) {
+            if (!after[id]) removed.push(id);
+        }
+        let msg = '';
+        if (added.length) msg += `Đã thêm ${added.length} task từ Google Calendar.`;
+        if (removed.length) msg += `\nĐã xóa ${removed.length} task từ Google Calendar.`;
+        if (changed.length) msg += `\nCó ${changed.length} task đã thay đổi từ Google Calendar.`;
+        if (msg) {
+            await sendMessage(config.bossZaloId || '', msg.trim());
+            logger.info('[Webhook] Đã sync GCal, diff:', { added, removed, changed });
+        } else {
+            logger.info('[Webhook] Đã sync GCal, không có thay đổi.');
+        }
+        res.status(200).send('OK');
+    } catch (err) {
+        logger.error('[Webhook] Lỗi khi sync GCal:', err);
+        res.status(500).send('Error');
     }
-    for (const id in before) {
-      if (!after[id]) removed.push(id);
-    }
-    let msg = '';
-    if (added.length) msg += `Đã thêm ${added.length} task từ Google Calendar.`;
-    if (removed.length) msg += `\nĐã xóa ${removed.length} task từ Google Calendar.`;
-    if (changed.length) msg += `\nCó ${changed.length} task đã thay đổi từ Google Calendar.`;
-    if (msg) {
-      await sendMessage(config.bossZaloId || '', msg.trim());
-      logger.info('[Webhook] Đã sync GCal, diff:', { added, removed, changed });
-    } else {
-      logger.info('[Webhook] Đã sync GCal, không có thay đổi.');
-    }
-    res.status(200).send('OK');
-  } catch (err) {
-    logger.error('[Webhook] Lỗi khi sync GCal:', err);
-    res.status(500).send('Error');
-  }
 });
 
 // QR Code endpoints for Zalo login
 router.get('/qr', (req, res) => {
-  const qrData = getCurrentQR();
-  
-  if (!qrData) {
-    res.status(404).send(`
+    const qrData = getCurrentQR();
+
+    if (!qrData) {
+        res.status(404).send(`
       <!DOCTYPE html>
       <html>
         <head>
@@ -87,10 +87,10 @@ router.get('/qr', (req, res) => {
         </body>
       </html>
     `);
-    return;
-  }
+        return;
+    }
 
-  res.send(`
+    res.send(`
     <!DOCTYPE html>
     <html>
       <head>
@@ -144,10 +144,10 @@ router.get('/qr', (req, res) => {
           <h1>📱 Zalo QR Login</h1>
           
           <div class="qr-container">
-            ${qrData.base64 ? 
-              `<img src="data:image/png;base64,${qrData.base64}" alt="Zalo QR Code" class="qr-code" />` :
-              `<p>QR Code URL: <a href="${qrData.url}" target="_blank">${qrData.url}</a></p>`
-            }
+            ${qrData.base64 ?
+            `<img src="data:image/png;base64,${qrData.base64}" alt="Zalo QR Code" class="qr-code" />` :
+            `<p>QR Code URL: <a href="${qrData.url}" target="_blank">${qrData.url}</a></p>`
+        }
           </div>
           
           <div class="instructions">
@@ -177,34 +177,34 @@ router.get('/qr', (req, res) => {
 
 // QR image endpoint
 router.get('/qr.png', (req, res) => {
-  const qrPath = path.join(process.cwd(), 'qr.png');
-  
-  if (fs.existsSync(qrPath)) {
-    res.sendFile(qrPath);
-  } else {
-    res.status(404).send('QR code image not found');
-  }
+    const qrPath = path.join(process.cwd(), 'qr.png');
+
+    if (fs.existsSync(qrPath)) {
+        res.sendFile(qrPath);
+    } else {
+        res.status(404).send('QR code image not found');
+    }
 });
 
 // Status endpoint
 router.get('/status', (req, res) => {
-  const qrData = getCurrentQR();
-  const hasQR = !!qrData;
-  const hasCookies = fs.existsSync(config.zaloCookiePath);
-  
-  res.json({
-    timestamp: new Date().toISOString(),
-    zalo: {
-      loggedIn: hasCookies,
-      qrAvailable: hasQR,
-      qrExpiry: qrData ? new Date(qrData.timestamp + 5 * 60 * 1000).toISOString() : null
-    },
-    endpoints: {
-      qr: '/qr',
-      qrImage: '/qr.png',
-      status: '/status'
-    }
-  });
+    const qrData = getCurrentQR();
+    const hasQR = !!qrData;
+    const hasCookies = fs.existsSync(config.zaloCookiePath);
+
+    res.json({
+        timestamp: new Date().toISOString(),
+        zalo: {
+            loggedIn: hasCookies,
+            qrAvailable: hasQR,
+            qrExpiry: qrData ? new Date(qrData.timestamp + 5 * 60 * 1000).toISOString() : null
+        },
+        endpoints: {
+            qr: '/qr',
+            qrImage: '/qr.png',
+            status: '/status'
+        }
+    });
 });
 
 export default router;
