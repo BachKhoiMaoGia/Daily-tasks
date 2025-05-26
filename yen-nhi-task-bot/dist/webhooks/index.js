@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -193,8 +226,8 @@ router.get('/qr', (req, res) => {
               <li>Approve the login request</li>
             </ol>
           </div>
-          
-          <a href="/qr" class="refresh-btn">🔄 Refresh Page</a>
+            <a href="/qr" class="refresh-btn">🔄 Refresh Page</a>
+          <button onclick="regenerateQR()" class="refresh-btn" style="margin-left: 10px; background: #e74c3c;">♻️ Generate New QR</button>
           
           <div class="debug">
             <strong>Debug Info:</strong><br>
@@ -205,8 +238,7 @@ router.get('/qr', (req, res) => {
             ${qrData.base64 ? `Image Size: ${qrData.base64.length} chars` : ''}
           </div>
         </div>
-        
-        <script>
+          <script>
           // Auto refresh every 30 seconds
           setTimeout(() => {
             window.location.reload();
@@ -226,6 +258,44 @@ router.get('/qr', (req, res) => {
                 '⏰ Expires in: ' + mins + ':' + secs.toString().padStart(2, '0');
             }
           }, 1000);
+          
+          // QR Regeneration function
+          async function regenerateQR() {
+            const button = document.querySelector('button[onclick="regenerateQR()"]');
+            button.disabled = true;
+            button.innerHTML = '⏳ Generating...';
+            
+            try {
+              const response = await fetch('/qr/regenerate', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                button.innerHTML = '✅ Success!';
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1500);
+              } else {
+                button.innerHTML = '❌ Failed';
+                button.disabled = false;
+                setTimeout(() => {
+                  button.innerHTML = '♻️ Generate New QR';
+                }, 3000);
+              }
+            } catch (error) {
+              console.error('QR regeneration failed:', error);
+              button.innerHTML = '❌ Error';
+              button.disabled = false;
+              setTimeout(() => {
+                button.innerHTML = '♻️ Generate New QR';
+              }, 3000);
+            }
+          }
         </script>
       </body>
     </html>
@@ -275,5 +345,151 @@ router.get('/status', (req, res) => {
             status: '/status'
         }
     });
+});
+// QR regeneration endpoint
+router.post('/qr/regenerate', async (req, res) => {
+    try {
+        logger_js_1.default.info('[QR] Manual QR regeneration requested'); // Import login function dynamically to avoid circular dependency
+        const zaloModule = await Promise.resolve().then(() => __importStar(require('../zalo/index.js')));
+        // Start new QR login process  
+        if (zaloModule.forceQRLogin) {
+            zaloModule.forceQRLogin().catch((err) => {
+                logger_js_1.default.error('[QR] Failed to regenerate QR:', err);
+            });
+        }
+        else {
+            logger_js_1.default.error('[QR] forceQRLogin function not available');
+            res.status(500).json({
+                success: false,
+                message: 'QR regeneration function not available',
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+        res.json({
+            success: true,
+            message: 'QR regeneration started',
+            timestamp: new Date().toISOString(),
+            redirectTo: '/qr'
+        });
+    }
+    catch (err) {
+        logger_js_1.default.error('[QR] QR regeneration failed:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+// Debug credentials endpoint for production troubleshooting
+router.get('/debug/credentials', (req, res) => {
+    try {
+        const credentialsPath = index_js_3.config.zaloCookiePath;
+        const sessionPath = credentialsPath.replace('.credentials.json', '.session.json');
+        const result = {
+            timestamp: new Date().toISOString(),
+            environment: {
+                hasBase64Creds: !!index_js_3.config.zaloCredentialsBase64,
+                base64Length: index_js_3.config.zaloCredentialsBase64 ? index_js_3.config.zaloCredentialsBase64.length : 0,
+                hasBase64Session: !!index_js_3.config.zaloSessionBase64,
+                sessionBase64Length: index_js_3.config.zaloSessionBase64 ? index_js_3.config.zaloSessionBase64.length : 0
+            },
+            files: {
+                credentialsExists: fs_1.default.existsSync(credentialsPath),
+                sessionExists: fs_1.default.existsSync(sessionPath)
+            }
+        };
+        // Read credentials if exists
+        if (fs_1.default.existsSync(credentialsPath)) {
+            try {
+                const credData = fs_1.default.readFileSync(credentialsPath, 'utf8');
+                const creds = JSON.parse(credData);
+                result.credentials = {
+                    hasImei: !!creds.imei,
+                    hasUserAgent: !!creds.userAgent,
+                    hasCookie: !!creds.cookie,
+                    cookieType: Array.isArray(creds.cookie) ? 'array' : typeof creds.cookie,
+                    cookieLength: Array.isArray(creds.cookie) ? creds.cookie.length : 0,
+                    hasLanguage: !!creds.language,
+                    hasTimestamp: !!creds.timestamp,
+                    ageMinutes: creds.timestamp ? Math.round((Date.now() - creds.timestamp) / 1000 / 60) : null,
+                    isExpired: creds.timestamp ? (Date.now() - creds.timestamp > 24 * 60 * 60 * 1000) : null
+                };
+            }
+            catch (err) {
+                result.credentials = { error: 'Failed to parse credentials file' };
+            }
+        }
+        // Read session if exists
+        if (fs_1.default.existsSync(sessionPath)) {
+            try {
+                const sessionData = fs_1.default.readFileSync(sessionPath, 'utf8');
+                const session = JSON.parse(sessionData);
+                result.session = {
+                    isLoggedIn: session.isLoggedIn,
+                    loginMethod: session.loginMethod,
+                    sessionType: session.sessionType,
+                    ageMinutes: session.timestamp ? Math.round((Date.now() - session.timestamp) / 1000 / 60) : null,
+                    isExpired: session.timestamp ? (Date.now() - session.timestamp > 24 * 60 * 60 * 1000) : null
+                };
+            }
+            catch (err) {
+                result.session = { error: 'Failed to parse session file' };
+            }
+        }
+        res.json(result);
+    }
+    catch (err) {
+        res.status(500).json({
+            error: 'Debug endpoint failed',
+            message: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+// Manual login trigger endpoint for debugging
+router.post('/debug/trigger-login', async (req, res) => {
+    try {
+        logger_js_1.default.info('[Debug] Manual login trigger requested');
+        // Import login function dynamically
+        const zaloModule = await Promise.resolve().then(() => __importStar(require('../zalo/index.js')));
+        // Clear existing state first
+        if (zaloModule.cleanup) {
+            zaloModule.cleanup();
+            logger_js_1.default.info('[Debug] Cleaned up existing Zalo state');
+        }
+        // Trigger fresh login
+        logger_js_1.default.info('[Debug] Starting fresh login...');
+        const api = await zaloModule.login();
+        if (api) {
+            logger_js_1.default.info('[Debug] Login successful!');
+            res.json({
+                success: true,
+                message: 'Login triggered successfully',
+                timestamp: new Date().toISOString(),
+                hasApi: !!api,
+                redirectTo: '/qr'
+            });
+        }
+        else {
+            logger_js_1.default.warn('[Debug] Login returned null/undefined');
+            res.status(500).json({
+                success: false,
+                message: 'Login returned null',
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+    catch (err) {
+        logger_js_1.default.error('[Debug] Manual login trigger failed:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Login trigger failed',
+            error: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 exports.default = router;
