@@ -37,11 +37,12 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && apt-get autoremove -y \
-    && apt-get clean
+    && apt-get autoremove -y \    && apt-get clean
 
-# Create non-root user for security
-RUN groupadd -r node && useradd -r -g node node
+# Ensure node user exists (may already exist in base image)
+RUN if ! id -u node > /dev/null 2>&1; then \
+        groupadd -r node && useradd -r -g node node; \
+    fi
 
 # Copy package files
 COPY package*.json ./
