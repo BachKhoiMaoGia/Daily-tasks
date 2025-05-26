@@ -50,6 +50,16 @@ const qr_js_1 = require("../zalo/qr.js");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const router = express_1.default.Router();
+// Keep-alive endpoint for cron jobs
+router.get('/ping', (req, res) => {
+    res.json({
+        status: 'alive',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        message: 'Server is running healthy! 🚀'
+    });
+});
 function getTaskMap() {
     const rows = index_js_4.default.prepare('SELECT * FROM tasks').all();
     const map = {};

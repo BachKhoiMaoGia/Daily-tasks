@@ -10,6 +10,18 @@ exports.config = void 0;
  */
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
+// Debug environment variables on startup
+console.log('[CONFIG] Environment Variables Debug:', {
+    NODE_ENV: process.env.NODE_ENV,
+    hasZALO_CREDENTIALS_BASE64: !!process.env.ZALO_CREDENTIALS_BASE64,
+    ZALO_CREDENTIALS_BASE64_length: process.env.ZALO_CREDENTIALS_BASE64?.length || 0,
+    hasZALO_SESSION_BASE64: !!process.env.ZALO_SESSION_BASE64,
+    ZALO_SESSION_BASE64_length: process.env.ZALO_SESSION_BASE64?.length || 0,
+    hasOPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
+    totalEnvVars: Object.keys(process.env).length,
+    renderExternalUrl: process.env.RENDER_EXTERNAL_URL,
+    port: process.env.PORT
+});
 exports.config = {
     openaiApiKey: process.env.OPENAI_API_KEY,
     sttProvider: process.env.STT_PROVIDER || 'whisper',

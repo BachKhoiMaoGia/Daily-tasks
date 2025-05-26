@@ -41,9 +41,10 @@ let qrRetryCount = 0;
 /**
  * Decode and setup credentials from environment variables (for Render deployment)
  */
-function setupCredentialsFromEnv(): boolean {    try {
+function setupCredentialsFromEnv(): boolean {
+    try {
         logger.info('[Zalo] 🔍 Checking environment variables for credentials...');
-        
+
         // Debug environment variables
         logger.info('[Zalo] Full environment debug:', {
             NODE_ENV: process.env.NODE_ENV,
@@ -55,16 +56,16 @@ function setupCredentialsFromEnv(): boolean {    try {
             configSessionLength: config.zaloSessionBase64?.length || 0,
             allEnvKeys: Object.keys(process.env).filter(key => key.includes('ZALO'))
         });
-        
+
         logger.info('[Zalo] Environment check:', {
             hasZaloCredentialsBase64: !!config.zaloCredentialsBase64,
             hasZaloSessionBase64: !!config.zaloSessionBase64,
             credentialsLength: config.zaloCredentialsBase64?.length || 0,
             sessionLength: config.zaloSessionBase64?.length || 0
-        });        if (config.zaloCredentialsBase64) {
+        }); if (config.zaloCredentialsBase64) {
             logger.info('[Zalo] 🔐 Setting up credentials from environment variables...');
             logger.info(`[Zalo] Base64 credentials length: ${config.zaloCredentialsBase64.length}`);
-            
+
             // Decode credentials
             let credentialsData: string;
             try {

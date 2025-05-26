@@ -14,6 +14,17 @@ import path from 'path';
 
 const router = express.Router();
 
+// Keep-alive endpoint for cron jobs
+router.get('/ping', (req, res) => {
+    res.json({
+        status: 'alive',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        message: 'Server is running healthy! 🚀'
+    });
+});
+
 function getTaskMap() {
     const rows: any[] = db.prepare('SELECT * FROM tasks').all();
     const map: Record<string, any> = {};
