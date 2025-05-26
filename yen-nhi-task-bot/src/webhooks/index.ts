@@ -61,6 +61,14 @@ router.post('/gcal', async (req, res) => {
 router.get('/qr', (req, res) => {
     const qrData = getCurrentQR();
 
+    console.log('[QR Endpoint] QR request received, data:', {
+        hasQrData: !!qrData,
+        hasBase64: qrData ? !!qrData.base64 : false,
+        hasUrl: qrData ? !!qrData.url : false,
+        base64Length: qrData?.base64 ? qrData.base64.length : 0,
+        timestamp: qrData ? new Date(qrData.timestamp).toISOString() : null
+    });
+
     if (!qrData) {
         res.status(404).send(`
       <!DOCTYPE html>
@@ -82,6 +90,7 @@ router.get('/qr', (req, res) => {
               <p>No QR code available.</p>
               <p>Either already logged in or QR code has expired.</p>
               <p>Check server logs or restart the application to generate a new QR code.</p>
+              <p><em>Last checked: ${new Date().toISOString()}</em></p>
             </div>
           </div>
         </body>
@@ -89,6 +98,9 @@ router.get('/qr', (req, res) => {
     `);
         return;
     }
+
+    const qrAge = Math.round((Date.now() - qrData.timestamp) / 1000);
+    const remainingTime = Math.max(0, 480 - qrAge); // 8 minutes = 480 seconds
 
     res.send(`
     <!DOCTYPE html>
@@ -137,16 +149,33 @@ router.get('/qr', (req, res) => {
             border-radius: 5px;
             display: inline-block;
           }
+          .timer {
+            color: #e74c3c;
+            font-weight: bold;
+            margin: 10px 0;
+          }
+          .debug {
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+            text-align: left;
+          }
         </style>
       </head>
       <body>
         <div class="container">
           <h1>📱 Zalo QR Login</h1>
           
+          <div class="timer">
+            ⏰ Expires in: ${Math.floor(remainingTime / 60)}:${(remainingTime % 60).toString().padStart(2, '0')}
+          </div>
+          
           <div class="qr-container">
             ${qrData.base64 ?
             `<img src="data:image/png;base64,${qrData.base64}" alt="Zalo QR Code" class="qr-code" />` :
-            `<p>QR Code URL: <a href="${qrData.url}" target="_blank">${qrData.url}</a></p>`
+            qrData.url ?
+                `<p>QR Code URL: <a href="${qrData.url}" target="_blank">${qrData.url}</a></p>` :
+                `<p>⚠️ QR code data not available</p>`
         }
           </div>
           
@@ -158,10 +187,18 @@ router.get('/qr', (req, res) => {
               <li>Scan the QR code above</li>
               <li>Approve the login request</li>
             </ol>
-            <p><em>QR code expires in 5 minutes</em></p>
           </div>
           
           <a href="/qr" class="refresh-btn">🔄 Refresh Page</a>
+          
+          <div class="debug">
+            <strong>Debug Info:</strong><br>
+            Generated: ${new Date(qrData.timestamp).toISOString()}<br>
+            Age: ${qrAge}s<br>
+            Has Image: ${!!qrData.base64}<br>
+            Has URL: ${!!qrData.url}<br>
+            ${qrData.base64 ? `Image Size: ${qrData.base64.length} chars` : ''}
+          </div>
         </div>
         
         <script>
@@ -169,6 +206,21 @@ router.get('/qr', (req, res) => {
           setTimeout(() => {
             window.location.reload();
           }, 30000);
+          
+          // Update timer every second
+          let remaining = ${remainingTime};
+          setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+              document.querySelector('.timer').innerHTML = '⏰ Expired - refreshing...';
+              setTimeout(() => window.location.reload(), 2000);
+            } else {
+              const mins = Math.floor(remaining / 60);
+              const secs = remaining % 60;
+              document.querySelector('.timer').innerHTML = 
+                '⏰ Expires in: ' + mins + ':' + secs.toString().padStart(2, '0');
+            }
+          }, 1000);
         </script>
       </body>
     </html>
@@ -191,13 +243,29 @@ router.get('/status', (req, res) => {
     const qrData = getCurrentQR();
     const hasQR = !!qrData;
     const hasCookies = fs.existsSync(config.zaloCookiePath);
+    const qrAge = qrData ? Math.round((Date.now() - qrData.timestamp) / 1000) : null;
+    const qrExpiry = qrData ? new Date(qrData.timestamp + 8 * 60 * 1000) : null;
 
     res.json({
         timestamp: new Date().toISOString(),
+        server: {
+            uptime: process.uptime(),
+            environment: process.env.NODE_ENV || 'development',
+            platform: process.platform
+        },
         zalo: {
             loggedIn: hasCookies,
             qrAvailable: hasQR,
-            qrExpiry: qrData ? new Date(qrData.timestamp + 5 * 60 * 1000).toISOString() : null
+            qrAge: qrAge,
+            qrExpiry: qrExpiry ? qrExpiry.toISOString() : null,
+            qrExpired: qrExpiry ? Date.now() > qrExpiry.getTime() : null,
+            qrHasBase64: qrData ? !!qrData.base64 : false,
+            qrHasUrl: qrData ? !!qrData.url : false,
+            qrBase64Length: qrData?.base64 ? qrData.base64.length : 0
+        },
+        files: {
+            credentials: fs.existsSync(config.zaloCookiePath),
+            qrImage: fs.existsSync('qr.png')
         },
         endpoints: {
             qr: '/qr',

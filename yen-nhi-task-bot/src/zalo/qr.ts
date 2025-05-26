@@ -20,11 +20,20 @@ export function storeQRData(qrData: any) {
     console.log('[QR DEBUG] Received qrData:', JSON.stringify(qrData, null, 2));
 
     if (qrData) {
+        // Store QR data with proper base64 format - handle both old and new zca-js formats
         currentQR = {
-            url: qrData.token,
-            base64: qrData.image ? `data:image/png;base64,${qrData.image}` : undefined,
+            url: qrData.token || qrData.code || qrData.url,  // Handle different property names
+            base64: qrData.image,  // Store raw base64 without data:image prefix
             timestamp: Date.now()
         };
+
+        console.log('[QR] ✅ QR data stored:', {
+            hasUrl: !!currentQR.url,
+            hasBase64: !!currentQR.base64,
+            base64Length: currentQR.base64 ? currentQR.base64.length : 0,
+            timestamp: new Date(currentQR.timestamp).toISOString(),
+            originalKeys: Object.keys(qrData)
+        });
 
         // Also save base64 as image file if available
         if (qrData.image) {
@@ -43,10 +52,17 @@ export function storeQRData(qrData: any) {
  * Get current QR data
  */
 export function getCurrentQR(): QRData | null {
-    // QR codes expire after 5 minutes
-    if (currentQR && (Date.now() - currentQR.timestamp) > 5 * 60 * 1000) {
+    // QR codes expire after 8 minutes (extended for slower networks)
+    if (currentQR && (Date.now() - currentQR.timestamp) > 8 * 60 * 1000) {
+        console.log('[QR] QR code expired, clearing...');
         currentQR = null;
     }
+
+    if (currentQR) {
+        const age = Math.round((Date.now() - currentQR.timestamp) / 1000);
+        console.log(`[QR] Current QR age: ${age}s, hasBase64: ${!!currentQR.base64}, hasUrl: ${!!currentQR.url}`);
+    }
+
     return currentQR;
 }
 
