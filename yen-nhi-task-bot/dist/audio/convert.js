@@ -1,20 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.convertToWav = convertToWav;
 /**
  * convert.ts
  * Convert audio buffer (m4a/opus) to wav 16kHz mono using ffmpeg.
  * @module audio/convert
  */
-import { spawn } from 'child_process';
-import { config } from 'dotenv';
-config();
+const child_process_1 = require("child_process");
+const dotenv_1 = require("dotenv");
+(0, dotenv_1.config)();
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 /**
  * Convert input audio buffer to wav 16kHz mono using ffmpeg.
  * @param inputBuf - Input audio buffer
  * @returns Promise<Buffer> - wav buffer
  */
-export async function convertToWav(inputBuf) {
+async function convertToWav(inputBuf) {
     return new Promise((resolve, reject) => {
-        const ffmpeg = spawn(FFMPEG_PATH, [
+        const ffmpeg = (0, child_process_1.spawn)(FFMPEG_PATH, [
             '-i',
             'pipe:0',
             '-ar',

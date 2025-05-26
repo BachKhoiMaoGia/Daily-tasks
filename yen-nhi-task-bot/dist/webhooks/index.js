@@ -1,19 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * webhooks/index.ts
  * Express webhook for Google Calendar push notifications and QR display.
  */
-import express from 'express';
-import { syncFromGCal } from '../gcal/index.js';
-import logger from '../utils/logger.js';
-import { sendMessage } from '../zalo/index.js';
-import { config } from '../config/index.js';
-import db from '../db/index.js';
-import { getCurrentQR } from '../zalo/qr.js';
-import fs from 'fs';
-import path from 'path';
-const router = express.Router();
+const express_1 = __importDefault(require("express"));
+const index_js_1 = require("../gcal/index.js");
+const logger_js_1 = __importDefault(require("../utils/logger.js"));
+const index_js_2 = require("../zalo/index.js");
+const index_js_3 = require("../config/index.js");
+const index_js_4 = __importDefault(require("../db/index.js"));
+const qr_js_1 = require("../zalo/qr.js");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const router = express_1.default.Router();
 function getTaskMap() {
-    const rows = db.prepare('SELECT * FROM tasks').all();
+    const rows = index_js_4.default.prepare('SELECT * FROM tasks').all();
     const map = {};
     for (const r of rows) {
         if (r.gcal_event_id)
@@ -25,7 +30,7 @@ router.post('/gcal', async (req, res) => {
     try {
         // Lấy snapshot trước khi sync
         const before = getTaskMap();
-        await syncFromGCal();
+        await (0, index_js_1.syncFromGCal)();
         const after = getTaskMap();
         // So sánh diff
         const added = [];
@@ -49,22 +54,22 @@ router.post('/gcal', async (req, res) => {
         if (changed.length)
             msg += `\nCó ${changed.length} task đã thay đổi từ Google Calendar.`;
         if (msg) {
-            await sendMessage(config.bossZaloId || '', msg.trim());
-            logger.info('[Webhook] Đã sync GCal, diff:', { added, removed, changed });
+            await (0, index_js_2.sendMessage)(index_js_3.config.bossZaloId || '', msg.trim());
+            logger_js_1.default.info('[Webhook] Đã sync GCal, diff:', { added, removed, changed });
         }
         else {
-            logger.info('[Webhook] Đã sync GCal, không có thay đổi.');
+            logger_js_1.default.info('[Webhook] Đã sync GCal, không có thay đổi.');
         }
         res.status(200).send('OK');
     }
     catch (err) {
-        logger.error('[Webhook] Lỗi khi sync GCal:', err);
+        logger_js_1.default.error('[Webhook] Lỗi khi sync GCal:', err);
         res.status(500).send('Error');
     }
 });
 // QR Code endpoints for Zalo login
 router.get('/qr', (req, res) => {
-    const qrData = getCurrentQR();
+    const qrData = (0, qr_js_1.getCurrentQR)();
     if (!qrData) {
         res.status(404).send(`
       <!DOCTYPE html>
@@ -178,8 +183,8 @@ router.get('/qr', (req, res) => {
 });
 // QR image endpoint
 router.get('/qr.png', (req, res) => {
-    const qrPath = path.join(process.cwd(), 'qr.png');
-    if (fs.existsSync(qrPath)) {
+    const qrPath = path_1.default.join(process.cwd(), 'qr.png');
+    if (fs_1.default.existsSync(qrPath)) {
         res.sendFile(qrPath);
     }
     else {
@@ -188,9 +193,9 @@ router.get('/qr.png', (req, res) => {
 });
 // Status endpoint
 router.get('/status', (req, res) => {
-    const qrData = getCurrentQR();
+    const qrData = (0, qr_js_1.getCurrentQR)();
     const hasQR = !!qrData;
-    const hasCookies = fs.existsSync(config.zaloCookiePath);
+    const hasCookies = fs_1.default.existsSync(index_js_3.config.zaloCookiePath);
     res.json({
         timestamp: new Date().toISOString(),
         zalo: {
@@ -205,4 +210,4 @@ router.get('/status', (req, res) => {
         }
     });
 });
-export default router;
+exports.default = router;

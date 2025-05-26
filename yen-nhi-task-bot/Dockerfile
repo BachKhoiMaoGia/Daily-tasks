@@ -55,8 +55,8 @@ RUN npm ci --only=production \
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy necessary source files (for runtime dependencies)
-COPY --from=builder /app/src/google ./src/google
+# Copy package.json for runtime info
+COPY --from=builder /app/package.json ./package.json
 
 # Create directories and set permissions
 RUN mkdir -p /app/tmp /app/audio \

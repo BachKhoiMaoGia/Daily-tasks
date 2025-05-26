@@ -1,10 +1,15 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * db/index.ts
  * SQLite DB for mapping task_id <-> gcal_event_id.
  */
-import Database from 'better-sqlite3';
-import path from 'path';
-const db = new Database(path.resolve('tasks.db'));
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
+const path_1 = __importDefault(require("path"));
+const db = new better_sqlite3_1.default(path_1.default.resolve('tasks.db'));
 db.exec(`CREATE TABLE IF NOT EXISTS tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   content TEXT NOT NULL,
@@ -52,4 +57,4 @@ try {
 catch {
     // Column already exists, ignore
 }
-export default db;
+exports.default = db;
