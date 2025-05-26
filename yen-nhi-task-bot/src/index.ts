@@ -60,14 +60,22 @@ async function main() {    // Initialize Google Manager
         logger.info('[TaskOps] Task Operations functions imported');
     } catch (err) {
         logger.error('[Google] Failed to initialize Google Manager:', err);
-    }
-
-    logger.info('[Zalo] Bắt đầu đăng nhập Zalo...');
+    } logger.info('[Zalo] Bắt đầu đăng nhập Zalo...');
     try {
-        await login();
+        const result = await login();
+        if (result) {
+            logger.info('[Zalo] ✅ Đăng nhập thành công! API instance available.');
+        } else {
+            logger.warn('[Zalo] ⚠️ Login function returned null/undefined');
+        }
         logger.info('[Zalo] Đã gọi xong hàm login(). Nếu có QR, hãy kiểm tra terminal để quét.');
     } catch (err) {
-        logger.error('[Zalo] Lỗi khi đăng nhập:', err);        // Don't throw, keep server running
+        logger.error('[Zalo] ❌ Lỗi khi đăng nhập:', err);
+        logger.error('[Zalo] Error details:', {
+            message: (err as Error).message,
+            stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n')
+        });
+        // Don't throw, keep server running
     }
 
     onMessage(async (msg) => {

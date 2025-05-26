@@ -75,11 +75,22 @@ async function main() {
     }
     logger_1.default.info('[Zalo] Bắt đầu đăng nhập Zalo...');
     try {
-        await (0, index_2.login)();
+        const result = await (0, index_2.login)();
+        if (result) {
+            logger_1.default.info('[Zalo] ✅ Đăng nhập thành công! API instance available.');
+        }
+        else {
+            logger_1.default.warn('[Zalo] ⚠️ Login function returned null/undefined');
+        }
         logger_1.default.info('[Zalo] Đã gọi xong hàm login(). Nếu có QR, hãy kiểm tra terminal để quét.');
     }
     catch (err) {
-        logger_1.default.error('[Zalo] Lỗi khi đăng nhập:', err); // Don't throw, keep server running
+        logger_1.default.error('[Zalo] ❌ Lỗi khi đăng nhập:', err);
+        logger_1.default.error('[Zalo] Error details:', {
+            message: err.message,
+            stack: err.stack?.split('\n').slice(0, 5).join('\n')
+        });
+        // Don't throw, keep server running
     }
     (0, index_2.onMessage)(async (msg) => {
         try {

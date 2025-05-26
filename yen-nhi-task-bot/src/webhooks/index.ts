@@ -355,7 +355,7 @@ router.get('/debug/credentials', (req, res) => {
     try {
         const credentialsPath = config.zaloCookiePath;
         const sessionPath = credentialsPath.replace('.credentials.json', '.session.json');
-        
+
         const result: any = {
             timestamp: new Date().toISOString(),
             environment: {
@@ -422,20 +422,20 @@ router.get('/debug/credentials', (req, res) => {
 router.post('/debug/trigger-login', async (req, res) => {
     try {
         logger.info('[Debug] Manual login trigger requested');
-        
+
         // Import login function dynamically
         const zaloModule = await import('../zalo/index.js') as any;
-        
+
         // Clear existing state first
         if (zaloModule.cleanup) {
             zaloModule.cleanup();
             logger.info('[Debug] Cleaned up existing Zalo state');
         }
-        
+
         // Trigger fresh login
         logger.info('[Debug] Starting fresh login...');
         const api = await zaloModule.login();
-        
+
         if (api) {
             logger.info('[Debug] Login successful!');
             res.json({
