@@ -146,7 +146,6 @@ completion-summary.js
 
 # Source code backups and variations
 src/bot/
-src/google/
 src/gtasks/
 src/*-backup.ts
 src/*-fixed.ts
