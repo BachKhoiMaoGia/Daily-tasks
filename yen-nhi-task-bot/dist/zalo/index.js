@@ -15,40 +15,14 @@ exports.cleanup = cleanup;
  */
 const zca_js_1 = require("zca-js");
 const fs_1 = __importDefault(require("fs"));
-const index_1 = require("../config/index");
-const qr_1 = require("./qr");
-const logger_1 = __importDefault(require("../utils/logger"));
+const index_js_1 = require("../config/index.js");
+const qr_js_1 = require("./qr.js");
+const logger_js_1 = __importDefault(require("../utils/logger.js"));
 let zaloInstance = null;
 let apiInstance = null;
-const SESSION_FILE = index_1.config.zaloCookiePath.replace('.credentials.json', '.session.json');
-const CREDENTIALS_FILE = index_1.config.zaloCookiePath;
+const SESSION_FILE = index_js_1.config.zaloCookiePath.replace('.txt', '.session.json');
+const CREDENTIALS_FILE = index_js_1.config.zaloCookiePath.replace('.txt', '.credentials.json');
 const SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
-/**
- * Decode and setup credentials from environment variables (for Render deployment)
- */
-function setupCredentialsFromEnv() {
-    try {
-        if (index_1.config.zaloCredentialsBase64) {
-            logger_1.default.info('[Zalo] 🔐 Setting up credentials from environment variables...');
-            // Decode credentials
-            const credentialsData = Buffer.from(index_1.config.zaloCredentialsBase64, 'base64').toString('utf8');
-            fs_1.default.writeFileSync(CREDENTIALS_FILE, credentialsData);
-            logger_1.default.info('[Zalo] ✅ Credentials decoded and saved');
-            // Decode session if available
-            if (index_1.config.zaloSessionBase64) {
-                const sessionData = Buffer.from(index_1.config.zaloSessionBase64, 'base64').toString('utf8');
-                fs_1.default.writeFileSync(SESSION_FILE, sessionData);
-                logger_1.default.info('[Zalo] ✅ Session decoded and saved');
-            }
-            return true;
-        }
-        return false;
-    }
-    catch (err) {
-        logger_1.default.error('[Zalo] ❌ Failed to setup credentials from environment:', err);
-        return false;
-    }
-}
 /**
  * Save complete credentials using the zca-js pattern
  */
@@ -63,11 +37,11 @@ function saveCredentials(api) {
             timestamp: Date.now()
         };
         fs_1.default.writeFileSync(CREDENTIALS_FILE, JSON.stringify(credentials, null, 2), 'utf8');
-        logger_1.default.info(`[Zalo] ✅ Credentials saved: ${credentials.cookie.length} cookies, imei: ${credentials.imei}`);
+        logger_js_1.default.info(`[Zalo] ✅ Credentials saved: ${credentials.cookie.length} cookies, imei: ${credentials.imei}`);
         return credentials;
     }
     catch (err) {
-        logger_1.default.error('[Zalo] ❌ Failed to save credentials:', err);
+        logger_js_1.default.error('[Zalo] ❌ Failed to save credentials:', err);
         return null;
     }
 }
@@ -77,28 +51,28 @@ function saveCredentials(api) {
 function loadCredentials() {
     try {
         if (!fs_1.default.existsSync(CREDENTIALS_FILE)) {
-            logger_1.default.info('[Zalo] No saved credentials found');
+            logger_js_1.default.info('[Zalo] No saved credentials found');
             return null;
         }
         const data = fs_1.default.readFileSync(CREDENTIALS_FILE, 'utf8');
         const credentials = JSON.parse(data);
         // Validate credentials structure
         if (!credentials.imei || !credentials.userAgent || !Array.isArray(credentials.cookie)) {
-            logger_1.default.warn('[Zalo] Invalid credentials structure, will delete');
+            logger_js_1.default.warn('[Zalo] Invalid credentials structure, will delete');
             fs_1.default.unlinkSync(CREDENTIALS_FILE);
             return null;
         }
         // Check if credentials are too old (older than session max age)
         if (Date.now() - credentials.timestamp > SESSION_MAX_AGE) {
-            logger_1.default.info('[Zalo] Credentials expired, will delete');
+            logger_js_1.default.info('[Zalo] Credentials expired, will delete');
             fs_1.default.unlinkSync(CREDENTIALS_FILE);
             return null;
         }
-        logger_1.default.info(`[Zalo] ✅ Loaded valid credentials: ${credentials.cookie.length} cookies, age: ${Math.round((Date.now() - credentials.timestamp) / 1000 / 60)} minutes`);
+        logger_js_1.default.info(`[Zalo] ✅ Loaded valid credentials: ${credentials.cookie.length} cookies, age: ${Math.round((Date.now() - credentials.timestamp) / 1000 / 60)} minutes`);
         return credentials;
     }
     catch (err) {
-        logger_1.default.error('[Zalo] Failed to load credentials:', err);
+        logger_js_1.default.error('[Zalo] Failed to load credentials:', err);
         return null;
     }
 }
@@ -116,10 +90,10 @@ function saveSessionState(data) {
             ...data
         };
         fs_1.default.writeFileSync(SESSION_FILE, JSON.stringify(session, null, 2), 'utf8');
-        logger_1.default.info(`[Zalo] Session saved: ${session.loginMethod} login, ${session.sessionType} mode`);
+        logger_js_1.default.info(`[Zalo] Session saved: ${session.loginMethod} login, ${session.sessionType} mode`);
     }
     catch (err) {
-        logger_1.default.error('[Zalo] Failed to save session state:', err);
+        logger_js_1.default.error('[Zalo] Failed to save session state:', err);
     }
 }
 /**
@@ -134,13 +108,13 @@ function loadSessionState() {
         const session = JSON.parse(data);
         // Check if session is expired
         if (Date.now() - session.timestamp > SESSION_MAX_AGE) {
-            logger_1.default.info('[Zalo] Session expired');
+            logger_js_1.default.info('[Zalo] Session expired');
             return null;
         }
         return session;
     }
     catch (err) {
-        logger_1.default.error('[Zalo] Failed to load session state:', err);
+        logger_js_1.default.error('[Zalo] Failed to load session state:', err);
         return null;
     }
 }
@@ -158,19 +132,13 @@ async function login() {
     // Check existing session and API instance
     const session = loadSessionState();
     if (session && session.isLoggedIn && apiInstance) {
-        logger_1.default.info('[Zalo] ✅ Using existing API instance from valid session');
+        logger_js_1.default.info('[Zalo] ✅ Using existing API instance from valid session');
         return apiInstance;
-    } // Try to setup credentials from environment first (for Render deployment)
-    if (!fs_1.default.existsSync(CREDENTIALS_FILE)) {
-        const envSetup = setupCredentialsFromEnv();
-        if (envSetup) {
-            logger_1.default.info('[Zalo] 🚀 Environment credentials setup for production deployment');
-        }
     }
     // Try cookie-based login first
     const savedCredentials = loadCredentials();
     if (savedCredentials && isValidCredentials(savedCredentials)) {
-        logger_1.default.info('[Zalo] 🔄 Attempting cookie-based login...');
+        logger_js_1.default.info('[Zalo] 🔄 Attempting cookie-based login...');
         try {
             // Use exact format that zca-js expects
             const api = await zalo.login({
@@ -181,7 +149,7 @@ async function login() {
             });
             if (api) {
                 apiInstance = api;
-                logger_1.default.info('[Zalo] ✅ Cookie-based login successful!');
+                logger_js_1.default.info('[Zalo] ✅ Cookie-based login successful!');
                 // Update session state
                 saveSessionState({
                     isLoggedIn: true,
@@ -195,17 +163,17 @@ async function login() {
             }
         }
         catch (err) {
-            logger_1.default.error('[Zalo] ❌ Cookie-based login failed:', err.message);
-            logger_1.default.info('[Zalo] Will fallback to QR login...');
+            logger_js_1.default.error('[Zalo] ❌ Cookie-based login failed:', err.message);
+            logger_js_1.default.info('[Zalo] Will fallback to QR login...');
             // Delete invalid credentials
             if (fs_1.default.existsSync(CREDENTIALS_FILE)) {
                 fs_1.default.unlinkSync(CREDENTIALS_FILE);
-                logger_1.default.info('[Zalo] Deleted invalid credentials file');
+                logger_js_1.default.info('[Zalo] Deleted invalid credentials file');
             }
         }
     }
     // Fallback to QR login
-    logger_1.default.info('[Zalo] 📱 Starting QR login...');
+    logger_js_1.default.info('[Zalo] 📱 Starting QR login...');
     try {
         const api = await zalo.loginQR({
             userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
@@ -214,23 +182,23 @@ async function login() {
         }, (event) => {
             switch (event.type) {
                 case 0: // QRCodeGenerated
-                    logger_1.default.info('[Zalo] 📱 QR Code generated, please scan with your phone');
+                    logger_js_1.default.info('[Zalo] 📱 QR Code generated, please scan with your phone');
                     if (event.data) {
-                        (0, qr_1.storeQRData)(event.data);
+                        (0, qr_js_1.storeQRData)(event.data);
                     }
                     break;
                 case 1: // QRCodeExpired
-                    logger_1.default.warn('[Zalo] ⏰ QR Code expired');
+                    logger_js_1.default.warn('[Zalo] ⏰ QR Code expired');
                     break;
                 case 2: // QRCodeScanned
-                    logger_1.default.info('[Zalo] ✅ QR Code scanned successfully');
-                    (0, qr_1.clearQR)();
+                    logger_js_1.default.info('[Zalo] ✅ QR Code scanned successfully');
+                    (0, qr_js_1.clearQR)();
                     break;
                 case 3: // QRCodeDeclined
-                    logger_1.default.warn('[Zalo] ❌ QR Code scan declined');
+                    logger_js_1.default.warn('[Zalo] ❌ QR Code scan declined');
                     break;
                 case 4: // GotLoginInfo
-                    logger_1.default.info('[Zalo] 📄 Login information received');
+                    logger_js_1.default.info('[Zalo] 📄 Login information received');
                     // Save credentials here using the callback data
                     if (event.data) {
                         try {
@@ -242,10 +210,10 @@ async function login() {
                                 timestamp: Date.now()
                             };
                             fs_1.default.writeFileSync(CREDENTIALS_FILE, JSON.stringify(callbackCredentials, null, 2), 'utf8');
-                            logger_1.default.info(`[Zalo] 💾 Pre-saved credentials from callback: ${callbackCredentials.cookie?.length || 0} cookies`);
+                            logger_js_1.default.info(`[Zalo] 💾 Pre-saved credentials from callback: ${callbackCredentials.cookie?.length || 0} cookies`);
                         }
                         catch (err) {
-                            logger_1.default.warn('[Zalo] Failed to pre-save credentials from callback:', err);
+                            logger_js_1.default.warn('[Zalo] Failed to pre-save credentials from callback:', err);
                         }
                     }
                     break;
@@ -253,7 +221,7 @@ async function login() {
         });
         if (api) {
             apiInstance = api;
-            logger_1.default.info('[Zalo] ✅ QR login successful!');
+            logger_js_1.default.info('[Zalo] ✅ QR login successful!');
             // Save credentials for future cookie-based logins
             const savedCredentials = saveCredentials(api);
             // Save session state
@@ -269,7 +237,7 @@ async function login() {
         }
     }
     catch (err) {
-        logger_1.default.error('[Zalo] ❌ QR login failed:', err.message);
+        logger_js_1.default.error('[Zalo] ❌ QR login failed:', err);
         throw new Error(`Zalo login failed: ${err.message}`);
     }
     throw new Error('Unable to login to Zalo');
@@ -280,16 +248,16 @@ async function login() {
 function setupMessageListener(api) {
     try {
         if (api.listener) {
-            logger_1.default.info('[Zalo] 🎧 Setting up message listener...');
+            logger_js_1.default.info('[Zalo] 🎧 Setting up message listener...');
             api.listener.start();
-            logger_1.default.info('[Zalo] ✅ Message listener started successfully');
+            logger_js_1.default.info('[Zalo] ✅ Message listener started successfully');
         }
         else {
-            logger_1.default.warn('[Zalo] ⚠️ API listener not available');
+            logger_js_1.default.warn('[Zalo] ⚠️ API listener not available');
         }
     }
     catch (err) {
-        logger_1.default.error('[Zalo] ❌ Failed to setup message listener:', err);
+        logger_js_1.default.error('[Zalo] ❌ Failed to setup message listener:', err);
     }
 }
 /**
@@ -297,23 +265,23 @@ function setupMessageListener(api) {
  */
 function onMessage(handler) {
     if (apiInstance && apiInstance.listener) {
-        logger_1.default.info('[Zalo] 📨 Setting up message handler...');
+        logger_js_1.default.info('[Zalo] 📨 Setting up message handler...');
         apiInstance.listener.on('message', (msg) => {
-            logger_1.default.info('[Zalo] 📬 Received message:', {
+            logger_js_1.default.info('[Zalo] 📬 Received message:', {
                 from: msg.uidFrom || msg.senderId || msg.fromId,
                 type: msg.type,
                 hasContent: !!(msg.data?.content || msg.content)
             });
             handler(msg);
         });
-        logger_1.default.info('[Zalo] ✅ Message handler setup complete');
+        logger_js_1.default.info('[Zalo] ✅ Message handler setup complete');
     }
     else {
-        logger_1.default.warn('[Zalo] ⚠️ API instance or listener not available for message handling');
+        logger_js_1.default.warn('[Zalo] ⚠️ API instance or listener not available for message handling');
         // Retry after a short delay
         setTimeout(() => {
             if (apiInstance && apiInstance.listener) {
-                logger_1.default.info('[Zalo] 🔄 Retrying message handler setup...');
+                logger_js_1.default.info('[Zalo] 🔄 Retrying message handler setup...');
                 onMessage(handler);
             }
         }, 5000);
@@ -324,7 +292,7 @@ function onMessage(handler) {
  */
 async function sendMessage(userId, text) {
     if (!apiInstance || !apiInstance.sendMessage) {
-        logger_1.default.error('[Zalo] ❌ API instance not available for sending message');
+        logger_js_1.default.error('[Zalo] ❌ API instance not available for sending message');
         throw new Error('Zalo API not ready for sending messages');
     }
     try {
@@ -332,11 +300,11 @@ async function sendMessage(userId, text) {
             msg: text,
             mentions: []
         }, userId, zca_js_1.ThreadType.User);
-        logger_1.default.info(`[Zalo] ✅ Message sent to ${userId}: ${text.substring(0, 50)}...`);
+        logger_js_1.default.info(`[Zalo] ✅ Message sent to ${userId}: ${text.substring(0, 50)}...`);
         return result;
     }
     catch (err) {
-        logger_1.default.error('[Zalo] ❌ Failed to send message:', err);
+        logger_js_1.default.error('[Zalo] ❌ Failed to send message:', err);
         throw err;
     }
 }
@@ -377,10 +345,10 @@ function cleanup() {
             fs_1.default.unlinkSync(SESSION_FILE);
         if (fs_1.default.existsSync(CREDENTIALS_FILE))
             fs_1.default.unlinkSync(CREDENTIALS_FILE);
-        logger_1.default.info('[Zalo] 🧹 Cleanup completed');
+        logger_js_1.default.info('[Zalo] 🧹 Cleanup completed');
     }
     catch (err) {
-        logger_1.default.warn('[Zalo] Warning during cleanup:', err);
+        logger_js_1.default.warn('[Zalo] Warning during cleanup:', err);
     }
 }
 exports.default = { login, onMessage, sendMessage, getLoginStatus, cleanup };
