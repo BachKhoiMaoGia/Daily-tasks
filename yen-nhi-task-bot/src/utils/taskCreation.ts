@@ -3,13 +3,13 @@
  * Handles task creation logic to avoid circular imports
  */
 
-import logger from './logger.js';
-import { sendMessage } from '../zalo/index.js';
-import { GoogleManager } from '../google/manager.js';
-import selectionManager, { SelectionManager } from '../google/selection.js';
-import { categorizeTaskType, createTaskWithConflictCheck } from './taskOperations.js';
-import reminderSystem from './reminderSystem.js';
-import db from '../db/index.js';
+import logger from './logger';
+import { sendMessage } from '../zalo/index';
+import { GoogleManager } from '../google/manager';
+import selectionManager, { SelectionManager } from '../google/selection';
+import { categorizeTaskType, createTaskWithConflictCheck } from './taskOperations';
+import reminderSystem from './reminderSystem';
+import db from '../db/index';
 
 let googleManagerInstance: GoogleManager | null = null;
 

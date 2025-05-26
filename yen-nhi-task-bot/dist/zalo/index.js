@@ -5,9 +5,9 @@
  */
 import { Zalo, ThreadType } from 'zca-js';
 import fs from 'fs';
-import { config } from '../config/index.js';
-import { storeQRData, clearQR } from './qr.js';
-import logger from '../utils/logger.js';
+import { config } from '../config/index';
+import { storeQRData, clearQR } from './qr';
+import logger from '../utils/logger';
 let zaloInstance = null;
 let apiInstance = null;
 const SESSION_FILE = config.zaloCookiePath.replace('.credentials.json', '.session.json');

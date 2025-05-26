@@ -2,8 +2,8 @@
  * Enhanced parser with LLM integration for intelligent command detection
  * Phân biệt đâu là task command thực sự vs trò chuyện bình thường
  */
-import logger from '../utils/logger.js';
-import { config } from '../config/index.js';
+import logger from '../utils/logger';
+import { config } from '../config/index';
 
 // Simple regex patterns for obvious commands
 const EXPLICIT_COMMANDS = /^\/(?:new|tạo|list|done|delete|help|stats|xong|xóa|hoàn|hoàn\s*thành|hoành\s*thành|me|edit|sửa|chỉnh\s*sửa)\b/i;

@@ -3,24 +3,24 @@
  * Main entry: Zalo login, message listener, audio/text handling, scheduler, webhooks.
  */
 import express from 'express';
-import { config } from './config/index.js';
-import logger from './utils/logger.js';
-import { login, onMessage, sendMessage } from './zalo/index.js';
-import { downloadAudio } from './audio/audioDownloader.js';
-import { convertToWav } from './audio/convert.js';
-import { transcribe } from './audio/stt.js';
-// import { parseCommand } from './parser/index.js';
-import { parseCommandEnhanced } from './parser/enhanced.js';
-import webhookRouter from './webhooks/index.js';
-import { startScheduler } from './scheduler/index.js';
-import db from './db/index.js';
-import { syncFromGCal } from './gcal/index.js';
-import { GoogleManager } from './google/manager.js';
-import selectionManager from './google/selection.js';
+import { config } from './config/index';
+import logger from './utils/logger';
+import { login, onMessage, sendMessage } from './zalo/index';
+import { downloadAudio } from './audio/audioDownloader';
+import { convertToWav } from './audio/convert';
+import { transcribe } from './audio/stt';
+// import { parseCommand } from './parser/index';
+import { parseCommandEnhanced } from './parser/enhanced';
+import webhookRouter from './webhooks/index';
+import { startScheduler } from './scheduler/index';
+import db from './db/index';
+import { syncFromGCal } from './gcal/index';
+import { GoogleManager } from './google/manager';
+import selectionManager from './google/selection';
 import { findTaskByReference, parseBatchReferences, batchDoneTasks, batchDeleteTasks, formatBatchResultMessage, getDeletedTasks, formatDeletedTasksList, editTask, batchEditTasks, parseEditCommand, formatEditResultMessage } from './utils/taskOperations.js';
 import { startConversationalTask, handleConversationResponse, hasActiveConversation, clearConversation } from './utils/conversation.js';
 import { initializeTaskCreation, handleTaskCreation, handleMissingInfoResponse, handleCalendarAndTaskListSelection } from './utils/taskCreation.js';
-import reminderSystem from './utils/reminderSystem.js';
+import reminderSystem from './utils/reminderSystem';
 // Initialize Google Manager
 let googleManager;
 async function main() {

@@ -2,10 +2,10 @@
  * Task Reminder System
  * Gửi nhắc nhở cho các task sắp đến hạn
  */
-import { TaskInfo } from '../google/manager.js';
-import logger from '../utils/logger.js';
-import { sendMessage } from '../zalo/index.js';
-import { config } from '../config/index.js';
+import { TaskInfo } from '../google/manager';
+import logger from '../utils/logger';
+import { sendMessage } from '../zalo/index';
+import { config } from '../config/index';
 
 interface ReminderTask {
     id: string;

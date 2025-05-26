@@ -1,8 +1,8 @@
 // scheduler/tasks.ts
 // Hàm gửi checklist 7h sáng và nhắc task gần đến hạn (15 phút)
-import db from '../db/index.js';
-import { config } from '../config/index.js';
-import { sendMessage } from '../zalo/index.js';
+import db from '../db/index';
+import { config } from '../config/index';
+import { sendMessage } from '../zalo/index';
 // Thêm cột near_due_notified nếu chưa có
 try {
     db.exec('ALTER TABLE tasks ADD COLUMN near_due_notified INTEGER DEFAULT 0');

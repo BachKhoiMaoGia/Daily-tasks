@@ -5,9 +5,9 @@
  */
 import { Zalo, type API, type Credentials, ThreadType } from 'zca-js';
 import fs from 'fs';
-import { config } from '../config/index.js';
-import { storeQRData, clearQR } from './qr.js';
-import logger from '../utils/logger.js';
+import { config } from '../config/index';
+import { storeQRData, clearQR } from './qr';
+import logger from '../utils/logger';
 
 let zaloInstance: Zalo | null = null;
 let apiInstance: API | null = null;
