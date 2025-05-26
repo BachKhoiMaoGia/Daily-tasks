@@ -1,90 +1,376 @@
 /**
- * zalo/index.ts
- * Zalo client using zca-js (QR login, message listener).
+ * zalo/index-fixed.ts
+ * Fixed Zalo client for zca-js@2.0.0-beta.21 with proper credential management
+ * This addresses the zpw_enk issue by using the exact pattern from zca-js examples
  */
-import { Zalo } from 'zca-js';
+import { Zalo, ThreadType } from 'zca-js';
 import fs from 'fs';
 import { config } from '../config/index.js';
-let client = null;
-function getZaloClient() {
-    if (!client) {
-        client = new Zalo();
+import { storeQRData, clearQR } from './qr.js';
+import logger from '../utils/logger.js';
+let zaloInstance = null;
+let apiInstance = null;
+const SESSION_FILE = config.zaloCookiePath.replace('.credentials.json', '.session.json');
+const CREDENTIALS_FILE = config.zaloCookiePath;
+const SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+/**
+ * Decode and setup credentials from environment variables (for Render deployment)
+ */
+function setupCredentialsFromEnv() {
+    try {
+        if (config.zaloCredentialsBase64) {
+            logger.info('[Zalo] 🔐 Setting up credentials from environment variables...');
+            // Decode credentials
+            const credentialsData = Buffer.from(config.zaloCredentialsBase64, 'base64').toString('utf8');
+            fs.writeFileSync(CREDENTIALS_FILE, credentialsData);
+            logger.info('[Zalo] ✅ Credentials decoded and saved');
+            // Decode session if available
+            if (config.zaloSessionBase64) {
+                const sessionData = Buffer.from(config.zaloSessionBase64, 'base64').toString('utf8');
+                fs.writeFileSync(SESSION_FILE, sessionData);
+                logger.info('[Zalo] ✅ Session decoded and saved');
+            }
+            return true;
+        }
+        return false;
     }
-    return client;
+    catch (err) {
+        logger.error('[Zalo] ❌ Failed to setup credentials from environment:', err);
+        return false;
+    }
 }
-export async function login() {
-    const zaloClient = getZaloClient();
-    if (!fs.existsSync(config.zaloCookiePath)) {
-        console.log('\n[Zalo] Chưa có cookie, khởi tạo đăng nhập QR...');
-        if (typeof zaloClient.loginQR === 'function') {
-            const api = await zaloClient.loginQR();
-            // In toàn bộ object trả về để debug
-            console.log('[Zalo][DEBUG] loginQR() result:', JSON.stringify(api, null, 2));
-            // In ra link QR nếu có
-            if (api && api.qr && api.qr.url) {
-                console.log(`\n[Zalo] Link QR: ${api.qr.url}`);
-                console.log('[Zalo] Bạn có thể mở link này trên trình duyệt để quét QR bằng app Zalo.');
-            }
-            else if (api && api.qr && api.qr.base64) {
-                // In QR base64 ra log để người dùng tự tạo file ảnh
-                console.log('[Zalo] QR base64 (copy phần sau vào file .png để quét):');
-                console.log(api.qr.base64);
-            }
-            else {
-                console.log('[Zalo] Đã tạo file qr.png, hãy mở file này để quét QR.');
-            }
-            // Lưu cookies object array vào file JSON
-            if (api && api.cookies) {
-                try {
-                    fs.writeFileSync(config.zaloCookiePath, JSON.stringify(api.cookies), 'utf8');
-                    console.log(`[Zalo] Đã lưu cookies object array vào ${config.zaloCookiePath}`);
-                }
-                catch (err) {
-                    console.error('[Zalo] Lỗi khi lưu cookies:', err);
-                }
-            }
-            else {
-                console.log('[Zalo] Không tìm thấy cookies để lưu. Đăng nhập thất bại!');
-                throw new Error('Không lấy được cookies sau khi quét QR.');
-            }
+/**
+ * Save complete credentials using the zca-js pattern
+ */
+function saveCredentials(api) {
+    try {
+        const context = api.getContext();
+        const credentials = {
+            imei: context.imei,
+            userAgent: context.userAgent,
+            cookie: context.cookie.toJSON()?.cookies || [],
+            language: context.language || 'vi',
+            timestamp: Date.now()
+        };
+        fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(credentials, null, 2), 'utf8');
+        logger.info(`[Zalo] ✅ Credentials saved: ${credentials.cookie.length} cookies, imei: ${credentials.imei}`);
+        return credentials;
+    }
+    catch (err) {
+        logger.error('[Zalo] ❌ Failed to save credentials:', err);
+        return null;
+    }
+}
+/**
+ * Load saved credentials
+ */
+function loadCredentials() {
+    try {
+        if (!fs.existsSync(CREDENTIALS_FILE)) {
+            logger.info('[Zalo] No saved credentials found');
+            return null;
         }
-        else {
-            console.error('[Zalo] Không tìm thấy hàm loginQR trên zca-js. Vui lòng kiểm tra lại phiên bản thư viện.');
-            throw new Error('Không tìm thấy hàm loginQR trên zca-js.');
+        const data = fs.readFileSync(CREDENTIALS_FILE, 'utf8');
+        const credentials = JSON.parse(data);
+        // Validate credentials structure
+        if (!credentials.imei || !credentials.userAgent || !Array.isArray(credentials.cookie)) {
+            logger.warn('[Zalo] Invalid credentials structure, will delete');
+            fs.unlinkSync(CREDENTIALS_FILE);
+            return null;
+        }
+        // Check if credentials are too old (older than session max age)
+        if (Date.now() - credentials.timestamp > SESSION_MAX_AGE) {
+            logger.info('[Zalo] Credentials expired, will delete');
+            fs.unlinkSync(CREDENTIALS_FILE);
+            return null;
+        }
+        logger.info(`[Zalo] ✅ Loaded valid credentials: ${credentials.cookie.length} cookies, age: ${Math.round((Date.now() - credentials.timestamp) / 1000 / 60)} minutes`);
+        return credentials;
+    }
+    catch (err) {
+        logger.error('[Zalo] Failed to load credentials:', err);
+        return null;
+    }
+}
+/**
+ * Save session state
+ */
+function saveSessionState(data) {
+    try {
+        const session = {
+            isLoggedIn: false,
+            timestamp: Date.now(),
+            loginMethod: 'qr',
+            sessionType: 'direct_api',
+            apiInstanceAvailable: !!apiInstance,
+            ...data
+        };
+        fs.writeFileSync(SESSION_FILE, JSON.stringify(session, null, 2), 'utf8');
+        logger.info(`[Zalo] Session saved: ${session.loginMethod} login, ${session.sessionType} mode`);
+    }
+    catch (err) {
+        logger.error('[Zalo] Failed to save session state:', err);
+    }
+}
+/**
+ * Load session state
+ */
+function loadSessionState() {
+    try {
+        if (!fs.existsSync(SESSION_FILE)) {
+            return null;
+        }
+        const data = fs.readFileSync(SESSION_FILE, 'utf8');
+        const session = JSON.parse(data);
+        // Check if session is expired
+        if (Date.now() - session.timestamp > SESSION_MAX_AGE) {
+            logger.info('[Zalo] Session expired');
+            return null;
+        }
+        return session;
+    }
+    catch (err) {
+        logger.error('[Zalo] Failed to load session state:', err);
+        return null;
+    }
+}
+/**
+ * Validate that credentials can be used for login
+ */
+function isValidCredentials(credentials) {
+    return !!(credentials.cookie && credentials.imei && credentials.userAgent);
+}
+/**
+ * Main login function with proper credential management
+ */
+export async function login() {
+    const zalo = getZaloInstance();
+    // Check existing session and API instance
+    const session = loadSessionState();
+    if (session && session.isLoggedIn && apiInstance) {
+        logger.info('[Zalo] ✅ Using existing API instance from valid session');
+        return apiInstance;
+    } // Try to setup credentials from environment first (for Render deployment)
+    if (!fs.existsSync(CREDENTIALS_FILE)) {
+        const envSetup = setupCredentialsFromEnv();
+        if (envSetup) {
+            logger.info('[Zalo] 🚀 Environment credentials setup for production deployment');
         }
     }
-    else {
-        // Nếu đã có cookies object array, luôn đọc và truyền vào client
+    // Try cookie-based login first
+    const savedCredentials = loadCredentials();
+    if (savedCredentials && isValidCredentials(savedCredentials)) {
+        logger.info('[Zalo] 🔄 Attempting cookie-based login...');
         try {
-            const cookiesArr = JSON.parse(fs.readFileSync(config.zaloCookiePath, 'utf8'));
-            if (typeof zaloClient.loginWithCookies === 'function') {
-                await zaloClient.loginWithCookies({ cookies: cookiesArr });
-                console.log('[Zalo] Đã đăng nhập bằng cookies (loginWithCookies).');
-            }
-            else if ('cookies' in zaloClient) {
-                zaloClient.cookies = cookiesArr;
-                console.log('[Zalo] Đã gán cookies trực tiếp vào client.');
-            }
-            else {
-                console.warn('[Zalo] Không có hàm loginWithCookies, chỉ gán cookies vào client. Nếu không nhận được message, hãy kiểm tra lại thư viện zca-js.');
+            // Use exact format that zca-js expects
+            const api = await zalo.login({
+                cookie: savedCredentials.cookie,
+                imei: savedCredentials.imei,
+                userAgent: savedCredentials.userAgent,
+                language: savedCredentials.language
+            });
+            if (api) {
+                apiInstance = api;
+                logger.info('[Zalo] ✅ Cookie-based login successful!');
+                // Update session state
+                saveSessionState({
+                    isLoggedIn: true,
+                    loginMethod: 'cookies',
+                    sessionType: 'cookie_based',
+                    apiInstanceAvailable: true,
+                    userId: savedCredentials.imei
+                });
+                setupMessageListener(api);
+                return api;
             }
         }
         catch (err) {
-            console.error('[Zalo] Lỗi khi đăng nhập bằng cookies:', err);
-            throw new Error('Đăng nhập Zalo bằng cookies thất bại. Hãy xóa cookies và quét lại QR.');
+            logger.error('[Zalo] ❌ Cookie-based login failed:', err.message);
+            logger.info('[Zalo] Will fallback to QR login...');
+            // Delete invalid credentials
+            if (fs.existsSync(CREDENTIALS_FILE)) {
+                fs.unlinkSync(CREDENTIALS_FILE);
+                logger.info('[Zalo] Deleted invalid credentials file');
+            }
         }
     }
+    // Fallback to QR login
+    logger.info('[Zalo] 📱 Starting QR login...');
+    try {
+        const api = await zalo.loginQR({
+            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+            language: "vi",
+            qrPath: "./qr.png"
+        }, (event) => {
+            switch (event.type) {
+                case 0: // QRCodeGenerated
+                    logger.info('[Zalo] 📱 QR Code generated, please scan with your phone');
+                    if (event.data) {
+                        storeQRData(event.data);
+                    }
+                    break;
+                case 1: // QRCodeExpired
+                    logger.warn('[Zalo] ⏰ QR Code expired');
+                    break;
+                case 2: // QRCodeScanned
+                    logger.info('[Zalo] ✅ QR Code scanned successfully');
+                    clearQR();
+                    break;
+                case 3: // QRCodeDeclined
+                    logger.warn('[Zalo] ❌ QR Code scan declined');
+                    break;
+                case 4: // GotLoginInfo
+                    logger.info('[Zalo] 📄 Login information received');
+                    // Save credentials here using the callback data
+                    if (event.data) {
+                        try {
+                            const callbackCredentials = {
+                                imei: event.data.imei,
+                                userAgent: event.data.userAgent,
+                                cookie: event.data.cookie,
+                                language: 'vi',
+                                timestamp: Date.now()
+                            };
+                            fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(callbackCredentials, null, 2), 'utf8');
+                            logger.info(`[Zalo] 💾 Pre-saved credentials from callback: ${callbackCredentials.cookie?.length || 0} cookies`);
+                        }
+                        catch (err) {
+                            logger.warn('[Zalo] Failed to pre-save credentials from callback:', err);
+                        }
+                    }
+                    break;
+            }
+        });
+        if (api) {
+            apiInstance = api;
+            logger.info('[Zalo] ✅ QR login successful!');
+            // Save credentials for future cookie-based logins
+            const savedCredentials = saveCredentials(api);
+            // Save session state
+            saveSessionState({
+                isLoggedIn: true,
+                loginMethod: 'qr',
+                sessionType: 'direct_api',
+                apiInstanceAvailable: true,
+                userId: savedCredentials?.imei || 'unknown'
+            });
+            setupMessageListener(api);
+            return api;
+        }
+    }
+    catch (err) {
+        logger.error('[Zalo] ❌ QR login failed:', err.message);
+        throw new Error(`Zalo login failed: ${err.message}`);
+    }
+    throw new Error('Unable to login to Zalo');
 }
+/**
+ * Setup message listener
+ */
+function setupMessageListener(api) {
+    try {
+        if (api.listener) {
+            logger.info('[Zalo] 🎧 Setting up message listener...');
+            api.listener.start();
+            logger.info('[Zalo] ✅ Message listener started successfully');
+        }
+        else {
+            logger.warn('[Zalo] ⚠️ API listener not available');
+        }
+    }
+    catch (err) {
+        logger.error('[Zalo] ❌ Failed to setup message listener:', err);
+    }
+}
+/**
+ * Setup message handler
+ */
 export function onMessage(handler) {
-    const zaloClient = getZaloClient();
-    if (zaloClient && typeof zaloClient.on === 'function') {
-        zaloClient.on('message', handler);
+    if (apiInstance && apiInstance.listener) {
+        logger.info('[Zalo] 📨 Setting up message handler...');
+        apiInstance.listener.on('message', (msg) => {
+            logger.info('[Zalo] 📬 Received message:', {
+                from: msg.uidFrom || msg.senderId || msg.fromId,
+                type: msg.type,
+                hasContent: !!(msg.data?.content || msg.content)
+            });
+            handler(msg);
+        });
+        logger.info('[Zalo] ✅ Message handler setup complete');
+    }
+    else {
+        logger.warn('[Zalo] ⚠️ API instance or listener not available for message handling');
+        // Retry after a short delay
+        setTimeout(() => {
+            if (apiInstance && apiInstance.listener) {
+                logger.info('[Zalo] 🔄 Retrying message handler setup...');
+                onMessage(handler);
+            }
+        }, 5000);
     }
 }
-export function sendMessage(userId, text) {
-    const zaloClient = getZaloClient();
-    if (zaloClient && typeof zaloClient.sendMessage === 'function') {
-        return zaloClient.sendMessage(userId, text);
+/**
+ * Send message with improved error handling
+ */
+export async function sendMessage(userId, text) {
+    if (!apiInstance || !apiInstance.sendMessage) {
+        logger.error('[Zalo] ❌ API instance not available for sending message');
+        throw new Error('Zalo API not ready for sending messages');
+    }
+    try {
+        const result = await apiInstance.sendMessage({
+            msg: text,
+            mentions: []
+        }, userId, ThreadType.User);
+        logger.info(`[Zalo] ✅ Message sent to ${userId}: ${text.substring(0, 50)}...`);
+        return result;
+    }
+    catch (err) {
+        logger.error('[Zalo] ❌ Failed to send message:', err);
+        throw err;
     }
 }
-export default { login, onMessage, sendMessage };
+/**
+ * Get Zalo instance
+ */
+function getZaloInstance() {
+    if (!zaloInstance) {
+        zaloInstance = new Zalo();
+    }
+    return zaloInstance;
+}
+/**
+ * Get current login status
+ */
+export function getLoginStatus() {
+    const session = loadSessionState();
+    const credentials = loadCredentials();
+    return {
+        isLoggedIn: !!apiInstance,
+        hasSession: !!session,
+        hasCredentials: !!credentials,
+        sessionType: session?.sessionType || 'none',
+        userId: session?.userId || 'unknown',
+        loginMethod: session?.loginMethod || 'none',
+        credentialsAge: credentials ? Math.round((Date.now() - credentials.timestamp) / 1000 / 60) : -1
+    };
+}
+/**
+ * Force cleanup - useful for testing
+ */
+export function cleanup() {
+    apiInstance = null;
+    zaloInstance = null;
+    // Optionally clear files
+    try {
+        if (fs.existsSync(SESSION_FILE))
+            fs.unlinkSync(SESSION_FILE);
+        if (fs.existsSync(CREDENTIALS_FILE))
+            fs.unlinkSync(CREDENTIALS_FILE);
+        logger.info('[Zalo] 🧹 Cleanup completed');
+    }
+    catch (err) {
+        logger.warn('[Zalo] Warning during cleanup:', err);
+    }
+}
+export default { login, onMessage, sendMessage, getLoginStatus, cleanup };

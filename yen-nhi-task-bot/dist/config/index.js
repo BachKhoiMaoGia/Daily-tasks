@@ -10,7 +10,11 @@ export const config = {
     ffmpegPath: process.env.FFMPEG_PATH || '/usr/bin/ffmpeg',
     audioTmp: process.env.AUDIO_TMP || './tmp',
     maxAudioMin: Number(process.env.MAX_AUDIO_MIN || 10),
-    zaloCookiePath: process.env.ZALO_COOKIE_PATH || '.cookies.json',
+    zaloCookiePath: process.env.ZALO_COOKIE_PATH || '.cookies.credentials.json',
+    zaloCredentialsBase64: process.env.ZALO_CREDENTIALS_BASE64,
+    zaloSessionBase64: process.env.ZALO_SESSION_BASE64,
+    huggingfaceApiKey: process.env.HUGGINGFACE_API_KEY,
+    huggingfaceWhisperModel: process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v3',
     google: {
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,

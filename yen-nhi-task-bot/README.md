@@ -1,54 +1,101 @@
-# yen-nhi-task-bot
+# 🤖 Vietnamese Task Bot
 
-AI agent nhận lệnh **text & audio** qua Zalo, convert audio→text, phân tích, lưu & đồng bộ task lên Google Calendar, nhắc Boss hằng ngày.
+**Zalo-powered AI task management bot** với voice recognition, Google Calendar sync và intelligent scheduling.
 
-## Tính năng chính
+[![Production Ready](https://img.shields.io/badge/status-production%20ready-green)](https://render.com)
+[![Docker](https://img.shields.io/badge/docker-optimized-blue)](./Dockerfile)
+[![TypeScript](https://img.shields.io/badge/typescript-strict-blue)](./tsconfig.json)
 
-- Nhận lệnh Zalo (text hoặc audio): `/new`, `/list`, `/done`, `/delete`, `/help`, `/me` hoặc nói tự nhiên.
-- Convert audio (m4a/opus) sang text bằng OpenAI Whisper API (ưu tiên) hoặc HuggingFace Whisper.
-- Lưu task vào SQLite, đồng bộ Google Calendar (CRUD, sync 2 chiều).
-- Nhắc checklist 07:00, nhắc gần đến hạn (15', anti-spam).
-- Webhook Google push sync DB, chỉ báo khi có thay đổi thực sự.
-- Đăng nhập Zalo bằng QR, lưu cookie bền vững.
-- Logging (pino), test (vitest), lint (ESLint + Prettier).
+## ✨ **Tính năng chính**
 
-## Kiến trúc & Công nghệ
+### 🗣️ **Voice & Text Interface**
+- ✅ Nhận lệnh qua **Zalo** (text hoặc audio)
+- ✅ **Vietnamese STT** (Whisper API + HuggingFace)
+- ✅ Phân tích ngôn ngữ tự nhiên thông minh
 
-- Node.js 18+, TypeScript strict (ESM)
-- Zalo: zca-js (QR login, cookie persist)
-- STT: OpenAI Whisper API (ưu tiên), HuggingFace Whisper (fallback)
-- Media convert: ffmpeg
-- Google Calendar: googleapis (OAuth2)
-- DB: SQLite (better-sqlite3)
-- Scheduler: node-cron
-- Web: Express
-- Env: dotenv
-- Lint: ESLint + Prettier
-- Test: vitest
-- Logging: pino (JSON)
-- Dockerfile + docker-compose
+### 📅 **Task Management**
+- ✅ **Batch operations**: `/done 1,2,3`, `/delete 1-5`
+- ✅ **Smart edit**: `/edit 1 content:New task`
+- ✅ **Conflict detection**: Tự động phát hiện xung đột lịch
+- ✅ **Auto-categorization**: Meeting/Calendar/Task
+
+### 🔄 **Google Integration**
+- ✅ **Bi-directional sync** với Google Calendar & Tasks
+- ✅ **Real-time updates** qua webhook
+- ✅ **Smart scheduling** với conflict prevention
+- ✅ **Multiple calendars/tasklists** support
+
+### 🔔 **Smart Reminders**
+- ✅ **Daily checklist** (07:00 sáng)
+- ✅ **Near-due alerts** (15 phút trước)
+- ✅ **Anti-spam** intelligent notifications
+- ✅ **Context-aware** reminders
+
+## 🚀 **Production Features**
+
+### 🐳 **Docker Optimized**
+- ✅ Multi-stage build (builder + production)
+- ✅ Security: Non-root user
+- ✅ Size: Optimized slim image
+- ✅ Health checks included
+
+### 📊 **Monitoring**
+- ✅ Health endpoint: `/health`
+- ✅ Structured JSON logging (pino)
+- ✅ Error tracking & graceful degradation
+- ✅ Production-ready error handling
+
+### 🔐 **Security**
+- ✅ Environment-based configuration
+- ✅ Secure OAuth2 flow
+- ✅ Cookie encryption & persistence
+- ✅ API key protection
 
 ---
 
-## Cài đặt & chạy local
+## 🛠️ **Tech Stack**
 
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Runtime** | Node.js 18+ TypeScript | ES modules, strict typing |
+| **Zalo** | zca-js | QR login, message handling |
+| **STT** | OpenAI Whisper, HuggingFace | Vietnamese speech recognition |
+| **Database** | SQLite (better-sqlite3) | Local task storage |
+| **Calendar** | Google APIs | Calendar/Tasks sync |
+| **Audio** | ffmpeg | Audio format conversion |
+| **Web** | Express | Webhooks, health checks |
+| **Scheduler** | node-cron | Automated reminders |
+| **Containerization** | Docker | Production deployment |
+
+---
+
+## 🏃‍♂️ **Quick Start**
+
+### **Local Development**
 ```bash
-git clone ...
+git clone <repository>
 cd yen-nhi-task-bot
 cp .env.example .env
+# Edit .env with your API keys
 npm install
 npm run build
 npm start
 ```
 
-### Hoặc dùng Docker (local)
+### **Docker (Local)**
 ```bash
 docker-compose up --build
 ```
 
----
+### **Production (Render.com)**
+```bash
+# Run deployment script
+.\deploy-render.ps1 -Build -Test -Push
+```
 
-## Deploy & vận hành trên Render.com
+📖 **Full deployment guide:** [RENDER_DEPLOY_GUIDE.md](./RENDER_DEPLOY_GUIDE.md)
+
+---
 
 ### 1. Deploy
 - Push code lên GitHub.

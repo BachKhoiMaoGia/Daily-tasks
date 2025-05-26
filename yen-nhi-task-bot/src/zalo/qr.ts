@@ -17,22 +17,23 @@ let currentQR: QRData | null = null;
  * Store QR data for web display
  */
 export function storeQRData(qrData: any) {
+    console.log('[QR DEBUG] Received qrData:', JSON.stringify(qrData, null, 2));
+
     if (qrData) {
         currentQR = {
-            url: qrData.url,
-            base64: qrData.base64,
+            url: qrData.token,
+            base64: qrData.image ? `data:image/png;base64,${qrData.image}` : undefined,
             timestamp: Date.now()
         };
 
         // Also save base64 as image file if available
-        if (qrData.base64) {
+        if (qrData.image) {
             try {
-                const base64Data = qrData.base64.replace(/^data:image\/png;base64,/, '');
                 const qrPath = path.join(process.cwd(), 'qr.png');
-                fs.writeFileSync(qrPath, Buffer.from(base64Data, 'base64'));
-                console.log('[QR] Saved QR code to qr.png');
+                fs.writeFileSync(qrPath, Buffer.from(qrData.image, 'base64'));
+                console.log('[QR] ✅ Saved QR code to qr.png');
             } catch (err) {
-                console.error('[QR] Error saving QR image:', err);
+                console.error('[QR] ❌ Error saving QR image:', err);
             }
         }
     }

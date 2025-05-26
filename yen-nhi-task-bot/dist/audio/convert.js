@@ -6,7 +6,7 @@
 import { spawn } from 'child_process';
 import { config } from 'dotenv';
 config();
-const FFMPEG_PATH = process.env.FFMPEG_PATH || '/usr/bin/ffmpeg';
+const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 /**
  * Convert input audio buffer to wav 16kHz mono using ffmpeg.
  * @param inputBuf - Input audio buffer

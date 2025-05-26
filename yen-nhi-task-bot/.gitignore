@@ -3,6 +3,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+package-lock.json
+yarn.lock
 
 # Runtime data
 pids
@@ -13,6 +15,7 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 .coverage/
+.nyc_output/
 
 # Environment variables - BẢO MẬT
 .env
@@ -32,13 +35,15 @@ RENDER_ENV_SETUP.md
 COMPLETION_REPORT.md
 validate-env.js
 
-# Zalo cookies - BẢO MẬT
+# Zalo cookies and session files - BẢO MẬT
 .cookies.json
 .cookies.txt
+.cookies.session.json
 cookies.json
 cookies.txt
 *.cookies.json
 *.cookies.txt
+*.session.json
 
 # Audio temporary files
 tmp/
@@ -62,6 +67,48 @@ logs/
 # Build output
 dist/
 build/
+
+# Testing and development files
+test-*.js
+test-*.mjs
+debug-*.js
+debug-*.mjs
+*-test.js
+*-test.mjs
+simple-*.js
+simple-*.mjs
+comprehensive-*.js
+comprehensive-*.mjs
+integration-*.js
+integration-*.mjs
+validation-*.js
+validation-*.mjs
+final-*.js
+final-*.mjs
+production-*.js
+production-*.mjs
+
+# Documentation and reports
+*_REPORT.md
+*_COMPLETION*.md
+*_STATUS*.md
+*_SUMMARY*.md
+*_GUIDE*.md
+*_CHECKLIST*.md
+CURRENT_*.md
+FINAL_*.md
+ENHANCED_*.md
+DEPLOYMENT_*.md
+NEXT_STEPS.md
+UPGRADE_GUIDE.md
+ZALO_COOKIE_MANAGEMENT.md
+monitoring-checklist.md
+
+# PowerShell and shell scripts (may contain sensitive info)
+*.ps1
+*.sh
+deploy*.ps1
+update*.ps1
 
 # OS generated files
 .DS_Store
@@ -89,6 +136,21 @@ qr.png
 qr_*.png
 *.qr
 
-# Backup files
+# Backup files and temporary scripts
 *.backup
 *.bak
+hello.js
+add-columns.js
+check-*.js
+completion-summary.js
+
+# Source code backups and variations
+src/bot/
+src/google/
+src/gtasks/
+src/*-backup.ts
+src/*-fixed.ts
+src/*-new.ts
+src/*-optimized.ts
+src/qr-test.ts
+src/test-export.ts

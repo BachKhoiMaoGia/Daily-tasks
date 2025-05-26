@@ -19,6 +19,8 @@ dist
 # Documentation
 *.md
 !README.md
+!RENDER_DEPLOY_GUIDE.md
+!RENDER_ENV_SETUP.md
 
 # IDE
 .vscode
@@ -28,10 +30,51 @@ dist
 .DS_Store
 Thumbs.db
 
-# Test files
+# Test files and debug scripts
 coverage
 test
+test/
 *.test.*
+*test*.js
+*test*.mjs
+*debug*.js
+*debug*.mjs
+*validation*.mjs
+*check*.js
+comprehensive-validation.mjs
+simple-*.js
+simple-*.mjs
+quick-*.js
+final-*.js
+final-*.mjs
+pre-deploy-*.js
+production-*.js
+integration-*.js
+integration-*.mjs
+live-*.mjs
+
+# Development scripts
+add-columns.js
+check-db.js
+check-gcal-sync.js
+completion-summary.js
+daily-health-check.js
+hello.js
+validate-schema.js
+
+# PowerShell scripts
+*.ps1
+
+# Reports and documentation
+*REPORT.md
+*COMPLETION*.md
+*STATUS*.md
+NEXT_STEPS.md
+monitoring-checklist.md
+SECURITY.md
+PROJECT_STRUCTURE.txt
+UPGRADE_GUIDE.md
+ZALO_COOKIE_MANAGEMENT.md
 
 # Temporary files
 tmp
@@ -44,7 +87,7 @@ tmp
 *.opus
 audio_*
 
-# Database
+# Database (will be created in container)
 *.db
 *.sqlite
 *.sqlite3
@@ -54,6 +97,16 @@ qr.png
 qr_*.png
 
 # Docker
-Dockerfile
-.dockerignore
+Dockerfile.login
 docker-compose.yml
+
+# Cookies and sessions (will be created at runtime)
+.cookies.*
+*.credentials.json
+*.session.json
+
+# Zalo backup files
+src/zalo/index-backup.ts
+src/zalo/index-fixed.ts
+src/zalo/index-new.ts
+src/zalo/index-optimized.ts
