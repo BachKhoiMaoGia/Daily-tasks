@@ -5,9 +5,9 @@
  */
 import { Zalo, type API, type Credentials, ThreadType } from 'zca-js';
 import fs from 'fs';
-import { config } from '../config/index';
-import { storeQRData, clearQR } from './qr';
-import logger from '../utils/logger';
+import { config } from '../config/index.js';
+import { storeQRData, clearQR } from './qr.js';
+import logger from '../utils/logger.js';
 
 let zaloInstance: Zalo | null = null;
 let apiInstance: API | null = null;
@@ -30,38 +30,9 @@ interface SavedCredentials {
     timestamp: number;
 }
 
-const SESSION_FILE = config.zaloCookiePath.replace('.credentials.json', '.session.json');
-const CREDENTIALS_FILE = config.zaloCookiePath;
+const SESSION_FILE = config.zaloCookiePath.replace('.txt', '.session.json');
+const CREDENTIALS_FILE = config.zaloCookiePath.replace('.txt', '.credentials.json');
 const SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
-
-/**
- * Decode and setup credentials from environment variables (for Render deployment)
- */
-function setupCredentialsFromEnv(): boolean {
-    try {
-        if (config.zaloCredentialsBase64) {
-            logger.info('[Zalo] 🔐 Setting up credentials from environment variables...');
-
-            // Decode credentials
-            const credentialsData = Buffer.from(config.zaloCredentialsBase64, 'base64').toString('utf8');
-            fs.writeFileSync(CREDENTIALS_FILE, credentialsData);
-            logger.info('[Zalo] ✅ Credentials decoded and saved');
-
-            // Decode session if available
-            if (config.zaloSessionBase64) {
-                const sessionData = Buffer.from(config.zaloSessionBase64, 'base64').toString('utf8');
-                fs.writeFileSync(SESSION_FILE, sessionData);
-                logger.info('[Zalo] ✅ Session decoded and saved');
-            }
-
-            return true;
-        }
-        return false;
-    } catch (err) {
-        logger.error('[Zalo] ❌ Failed to setup credentials from environment:', err);
-        return false;
-    }
-}
 
 /**
  * Save complete credentials using the zca-js pattern
@@ -186,12 +157,6 @@ export async function login(): Promise<API> {
     if (session && session.isLoggedIn && apiInstance) {
         logger.info('[Zalo] ✅ Using existing API instance from valid session');
         return apiInstance;
-    }    // Try to setup credentials from environment first (for Render deployment)
-    if (!fs.existsSync(CREDENTIALS_FILE)) {
-        const envSetup = setupCredentialsFromEnv();
-        if (envSetup) {
-            logger.info('[Zalo] 🚀 Environment credentials setup for production deployment');
-        }
     }
 
     // Try cookie-based login first
@@ -247,8 +212,7 @@ export async function login(): Promise<API> {
             (event) => {
                 switch (event.type) {
                     case 0: // QRCodeGenerated
-                        logger.info('[Zalo] 📱 QR Code generated, please scan with your phone');
-                        if (event.data) {
+                        logger.info('[Zalo] 📱 QR Code generated, please scan with your phone'); if (event.data) {
                             storeQRData(event.data);
                         }
                         break;
@@ -305,7 +269,7 @@ export async function login(): Promise<API> {
             return api;
         }
     } catch (err) {
-        logger.error('[Zalo] ❌ QR login failed:', (err as Error).message);
+        logger.error('[Zalo] ❌ QR login failed:', err);
         throw new Error(`Zalo login failed: ${(err as Error).message}`);
     }
 
