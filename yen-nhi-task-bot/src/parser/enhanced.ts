@@ -6,7 +6,7 @@ import logger from '../utils/logger';
 import { config } from '../config/index';
 
 // Simple regex patterns for obvious commands
-const EXPLICIT_COMMANDS = /^\/(?:new|tạo|list|done|delete|help|stats|xong|xóa|hoàn|hoàn\s*thành|hoành\s*thành|me|edit|sửa|chỉnh\s*sửa)\b/i;
+const EXPLICIT_COMMANDS = /^\/(?:new|tạo|list|done|delete|xóa|help|stats|xong|hoàn|hoàn\s*thành|hoành\s*thành|me|edit|sửa|chỉnh\s*sửa)\b/i;
 const SIMPLE_QUERIES = /^(thống kê|bao nhiêu|hoàn thành|chưa xong|danh sách|xem task|liệt kê)$/i;
 
 // Keywords that indicate task creation intent

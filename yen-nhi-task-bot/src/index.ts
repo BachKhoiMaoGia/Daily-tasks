@@ -584,9 +584,8 @@ async function main() {    // Initialize Google Manager
                 }
                 return;
             } if (cmd.cmd === 'delete') {
-                const arg = cmd.args.trim();
-                if (!arg) {
-                    await sendMessage(config.bossZaloId || '', 'Vui lòng nhập số thứ tự, ID, từ khóa hoặc danh sách task cần xóa.\n\n💡 Ví dụ:\n- delete 1\n- delete 1,2,3\n- delete 1-5\n- delete họp');
+                const arg = cmd.args.trim(); if (!arg) {
+                    await sendMessage(config.bossZaloId || '', 'Vui lòng nhập số thứ tự, ID, từ khóa hoặc danh sách task cần xóa.\n\n💡 Ví dụ:\n- delete 1 hoặc xóa 1\n- delete 1,2,3 hoặc xóa 1,2,3\n- delete 1-5 hoặc xóa 1-5\n- delete họp hoặc xóa họp');
                     return;
                 }
 
@@ -729,8 +728,8 @@ async function main() {    // Initialize Google Manager
 🔄 BATCH OPERATIONS (MỚI):
 /done 1,2,3 - Hoàn thành nhiều task cùng lúc
 /done 1-5 - Hoàn thành task từ vị trí 1 đến 5
-/delete 1,2,3 - Xóa nhiều task cùng lúc  
-/delete 1-5 - Xóa task từ vị trí 1 đến 5
+/delete 1,2,3 hoặc /xóa 1,2,3 - Xóa nhiều task cùng lúc  
+/delete 1-5 hoặc /xóa 1-5 - Xóa task từ vị trí 1 đến 5
 /edit 1,2,3 content:Cập nhật - Sửa nhiều task cùng lúc
 
 📊 XEM THÔNG TIN:
