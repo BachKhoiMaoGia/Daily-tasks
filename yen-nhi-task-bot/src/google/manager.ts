@@ -232,7 +232,7 @@ class GoogleManager {
                         info.dueTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
                         timeExtracted = true;
                     }
-                } else if (match[1] && pattern.source.includes('pm|am')) {
+                } else if (match[1] && (pattern.source.includes('pm|am'))) {
                     // X pm/am format
                     let hour = parseInt(match[1]);
                     const isPM = match[2]?.toLowerCase() === 'pm';
@@ -826,6 +826,21 @@ class GoogleManager {
             } else {
                 return { success: false, error: `Google Tasks API error: ${error.message}` };
             }
+        }
+    }/**
+     * Lấy danh sách tasks từ Google Tasks
+     */
+    async getTasks(taskListId: string = '@default'): Promise<any[]> {
+        try {
+            const response = await this.tasks.tasks.list({
+                tasklist: taskListId,
+                showCompleted: false,
+                showHidden: false
+            });
+            return response.data.items || [];
+        } catch (error) {
+            logger.error('Error fetching Google Tasks:', error);
+            return [];
         }
     }/**
      * Helper: Thêm 1 giờ vào thời gian

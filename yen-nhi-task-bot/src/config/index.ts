@@ -20,6 +20,8 @@ console.log('[CONFIG] Environment Variables Debug:', {
 
 export const config = {
     openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+    openaiModelId: process.env.OPENAI_MODEL_ID || 'gpt-3.5-turbo',
     sttProvider: process.env.STT_PROVIDER || 'whisper',
     ffmpegPath: process.env.FFMPEG_PATH || '/usr/bin/ffmpeg',
     audioTmp: process.env.AUDIO_TMP || './tmp',
