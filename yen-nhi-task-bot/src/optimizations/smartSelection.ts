@@ -1,7 +1,7 @@
-OLO'/.K. /**
-    * Smart Calendar / Task Selection with User Preference Learning
-        * Automatically choose the right calendar / task list based on patterns and user habits
-            */
+/**
+ * Smart Calendar / Task Selection with User Preference Learning
+ * Automatically choose the right calendar / task list based on patterns and user habits
+ */
 import logger from '../utils/logger.js';
 
 interface SelectionResult {
@@ -351,17 +351,16 @@ class SmartSelectionManager {
         };
 
         let totalAutoSelections = 0;
-        let totalSelections = 0;
-
-        for (const userPref of this.userPreferences.values()) {
+        let totalSelections = 0;        for (const userPref of Array.from(this.userPreferences.values())) {
             const patternCount = Object.keys(userPref.patterns).length;
             stats.totalPatterns += patternCount;
             totalSelections += userPref.totalSelections;
 
             // Count auto-selections (patterns with enough occurrences)
             for (const pattern of Object.values(userPref.patterns)) {
-                if (pattern.count >= this.MIN_PATTERN_OCCURRENCES) {
-                    totalAutoSelections += pattern.count;
+                const patternData = pattern as any;
+                if (patternData.count >= this.MIN_PATTERN_OCCURRENCES) {
+                    totalAutoSelections += patternData.count;
                 }
             }
         }
