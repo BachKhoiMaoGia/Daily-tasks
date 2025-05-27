@@ -44,6 +44,7 @@ import {
     handleCalendarAndTaskListSelection
 } from './utils/taskCreation.js';
 import reminderSystem from './utils/reminderSystem';
+import optimizationManager from './optimizations/optimizationManager.js';
 
 // Initialize Google Manager
 let googleManager: GoogleManager;
@@ -82,9 +83,7 @@ async function main() {    // Initialize Google Manager
         try {
             // Extract text and sender ID from message
             let plainText = '';
-            const senderId = msg.uidFrom || msg.data?.uidFrom || msg.senderId; logger.info({ zaloMsg: msg }, '[Zalo] Nhận message');
-
-            // ENHANCED MESSAGE FILTERING
+            const senderId = msg.uidFrom || msg.data?.uidFrom || msg.senderId; logger.info({ zaloMsg: msg }, '[Zalo] Nhận message');            // ENHANCED MESSAGE FILTERING
             // 1. Check sender ID
             if (!senderId || senderId !== config.bossZaloId) {
                 logger.info(`[Zalo] IGNORED - Message from non-Boss user: ${senderId} vs Boss: ${config.bossZaloId}`);
@@ -95,14 +94,31 @@ async function main() {    // Initialize Google Manager
             if (msg.data?.isGroup || msg.groupId || msg.data?.groupId) {
                 logger.info(`[Zalo] IGNORED - Group message from Boss (groupId: ${msg.groupId || msg.data?.groupId})`);
                 return;
-            }            // 3. Check message type validity - Accept text and voice messages
+            }
+
+            // 3. Enhanced thread filtering - Only process messages from dedicated Bot-Boss chat
+            const threadId = msg.threadId || msg.data?.threadId;
+            const isPrivateChat = !msg.data?.isGroup && !msg.groupId && !msg.data?.groupId;
+
+            if (!isPrivateChat && threadId) {
+                logger.info(`[Zalo] IGNORED - Message from thread ${threadId} that is not private Boss chat`);
+                return;
+            }
+
+            // 4. Check message type validity - Accept text and voice messages
             const msgType = msg.data?.msgType || msg.type;
             if (msgType && !['chat.text', 'chat.voice', 'webchat'].includes(msgType)) {
                 logger.info(`[Zalo] IGNORED - Unsupported message type: ${msgType}`);
                 return;
             }
 
-            logger.info(`[Zalo] ✅ PROCESSING - Valid private message from Boss: ${senderId}`);
+            // 5. Additional validation: Only accept messages that are actual content from Boss
+            if (msg.data?.isEvent || msg.data?.isSystemMessage) {
+                logger.info(`[Zalo] IGNORED - System/event message type`);
+                return;
+            }
+
+            logger.info(`[Zalo] ✅ PROCESSING - Valid private message from Boss: ${senderId} (thread: ${threadId || 'direct'})`);
 
             // Handle different message types
             if (msg.data?.msgType === 'chat.voice' || (msg.data?.content && typeof msg.data.content === 'object' && msg.data.content.href)) {
@@ -220,22 +236,58 @@ async function main() {    // Initialize Google Manager
                     logger.info('[Conversation] Handled conversation response');
                     return;
                 }
+            }            // ENHANCED PARSING: Use optimization manager instead of fallback
+            logger.info(`[Optimization] Processing message: "${plainText}"`);
+
+            // Get conversation history for context
+            const conversationHistory: string[] = []; // Could be enhanced to track actual history
+
+            // Apply optimization pipeline
+            const optimizationResult = await optimizationManager.optimizeMessageProcessing(
+                plainText,
+                senderId,
+                conversationHistory
+            );
+
+            logger.info({
+                optimizations: optimizationResult.optimizations,
+                performance: optimizationResult.performance,
+                confidence: optimizationResult.confidence
+            }, '[Optimization] Pipeline completed');
+
+            // Handle non-task messages
+            if (!optimizationResult.success ||
+                (optimizationResult.result.isTask === false && optimizationResult.result.quickReply)) {
+                await sendMessage(config.bossZaloId || '', optimizationResult.result.quickReply);
+                return;
             }
 
-            // ENHANCED PARSING: Use intelligent parser instead of fallback
-            const enhancedCmd = parseCommandEnhanced(plainText); if (!enhancedCmd) {
-                // Not a command - check if it's a natural task request
-                logger.info(`[Zalo] No command detected, checking for conversational task: "${plainText}"`);
+            // If optimization didn't produce a clear command, try enhanced parsing
+            let enhancedCmd;
+            if (!optimizationResult.result.cmd) {
+                enhancedCmd = parseCommandEnhanced(plainText);
+                if (!enhancedCmd) {
+                    // Not a command - check if it's a natural task request
+                    logger.info(`[Zalo] No command detected, checking for conversational task: "${plainText}"`);
 
-                const handledConversation = await startConversationalTask(senderId, plainText);
-                if (handledConversation) {
-                    logger.info('[Conversation] Started conversational task creation');
+                    const handledConversation = await startConversationalTask(senderId, plainText);
+                    if (handledConversation) {
+                        logger.info('[Conversation] Started conversational task creation');
+                        return;
+                    }
+
+                    // Truly just casual conversation
+                    logger.info(`[Zalo] Casual conversation detected, not processing: "${plainText}"`);
                     return;
                 }
-
-                // Truly just casual conversation
-                logger.info(`[Zalo] Casual conversation detected, not processing: "${plainText}"`);
-                return;
+            } else {
+                // Use optimized result
+                enhancedCmd = {
+                    cmd: optimizationResult.result.cmd || 'add',
+                    args: optimizationResult.result.title || plainText,
+                    confidence: optimizationResult.confidence,
+                    reasoning: 'From optimization pipeline'
+                };
             }
 
             // Log parsing results
@@ -734,13 +786,21 @@ Bot sẽ hỏi thêm thông tin thiếu!
 
     // Start reminder system
     reminderSystem.startChecking();
-    logger.info('[Reminder] Task reminder system started');
-
-    // Định kỳ đồng bộ 2 chiều Google Calendar - Add prevention for testing
+    logger.info('[Reminder] Task reminder system started');    // Định kỳ đồng bộ 2 chiều Google Calendar - Enhanced with better error handling
     const enableAutoSync = process.env.ENABLE_AUTO_SYNC !== 'false';
     if (enableAutoSync) {
-        setInterval(syncFromGCal, 5 * 60 * 1000); // 5 phút
-        logger.info('[Main] Auto-sync Google Calendar enabled (5 min interval)');
+        // More frequent sync for better real-time updates
+        setInterval(async () => {
+            try {
+                await syncFromGCal();
+                logger.info('[Main] Auto-sync Google Calendar completed successfully');
+            } catch (error) {
+                logger.error('[Main] Auto-sync Google Calendar failed:', error);
+                // Continue running even if sync fails
+            }
+        }, 2 * 60 * 1000); // 2 minutes instead of 5
+
+        logger.info('[Main] Auto-sync Google Calendar enabled (2 min interval)');
     } else {
         logger.info('[Main] Auto-sync Google Calendar disabled for testing');
     }

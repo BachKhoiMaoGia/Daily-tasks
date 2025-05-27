@@ -2,7 +2,7 @@
  * config/index.ts
  * Centralized config loader using dotenv.
  */
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 dotenv.config();
 
 // Debug environment variables on startup
