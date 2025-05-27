@@ -5,37 +5,31 @@ describe('transcribe', () => {
         // Reset all mocks and modules
         vi.resetAllMocks();
         vi.resetModules();
-    });
-
-    it('should throw if missing both API keys', async () => {
-        // Mock process.env to have no API keys
+    });    it('should throw if missing Hugging Face API key', async () => {
+        // Mock process.env to have no Hugging Face API key
         vi.stubGlobal('process', {
             ...process,
             env: {
                 ...process.env,
-                STT_PROVIDER: 'whisper',
-                OPENAI_API_KEY: undefined,
                 HUGGINGFACE_API_KEY: undefined
             }
         });
 
         // Import after mocking env vars
         const { transcribe } = await import('../src/audio/stt');
-        await expect(transcribe(Buffer.from('test'))).rejects.toThrow('No STT API key provided');
-    }); it('should try Hugging Face first when HF key exists', async () => {
-        // Mock process.env with HF key but no OpenAI key
+        await expect(transcribe(Buffer.from('test'))).rejects.toThrow('Invalid or missing HUGGINGFACE_API_KEY');
+    });    it('should throw if invalid Hugging Face API key', async () => {
+        // Mock process.env with invalid HF key
         vi.stubGlobal('process', {
             ...process,
             env: {
                 ...process.env,
-                STT_PROVIDER: 'whisper',
-                OPENAI_API_KEY: undefined,
                 HUGGINGFACE_API_KEY: 'invalid'
             }
         });
 
         // Import after mocking env vars
         const { transcribe } = await import('../src/audio/stt');
-        await expect(transcribe(Buffer.from('test'))).rejects.toThrow('Hugging Face Whisper API failed');
+        await expect(transcribe(Buffer.from('test'))).rejects.toThrow('Invalid or missing HUGGINGFACE_API_KEY');
     });
 });

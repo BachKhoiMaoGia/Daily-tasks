@@ -1,0 +1,39 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Database files
+*.db
+*.sqlite
+*.db-journal
+
+# Coverage reports
+coverage/
+.tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Credentials and sensitive files
+*.credentials.json
+.cookies.credentials.json
+render-credentials.env
+
+# Logs
+logs/
+*.log
