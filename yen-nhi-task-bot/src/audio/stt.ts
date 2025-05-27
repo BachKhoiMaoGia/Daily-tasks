@@ -24,7 +24,7 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
     const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
     const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v3';
 
-    logger.info(`[STT] Attempting transcription with provider: ${STT_PROVIDER}`);if (STT_PROVIDER === 'whisper') {
+    logger.info(`[STT] Attempting transcription with provider: ${STT_PROVIDER}`); if (STT_PROVIDER === 'whisper') {
         // Prioritize Hugging Face if API key is available
         if (HUGGINGFACE_API_KEY) {
             try {
@@ -72,47 +72,55 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
 }
 
 /**
- * Transcribe using Hugging Face Whisper API with retry logic
+ * Transcribe using Hugging Face Inference API with retry logic
  */
 async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: string, retries = 3): Promise<string> {
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            logger.info(`[STT] Hugging Face attempt ${attempt}/${retries} using model: ${model}`);
+            logger.info(`[STT] Hugging Face Inference API attempt ${attempt}/${retries} using model: ${model}`);
             logger.info(`[STT] Audio buffer size: ${buf.length} bytes`);
 
+            // Use the traditional Inference API endpoint with raw audio buffer
             const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${apiKey}`,
-                    'Content-Type': 'audio/wav',
                 },
                 body: buf,
                 timeout: 30000, // 30 second timeout
             });
 
-            logger.info(`[STT] Hugging Face API response status: ${res.status}`);
-
-            if (!res.ok) {
+            logger.info(`[STT] Hugging Face API response status: ${res.status}`); if (!res.ok) {
                 const errorText = await res.text();
                 logger.error(`[STT] Hugging Face API error ${res.status}: ${errorText}`);
 
-                if (res.status === 503 && attempt < retries) {
+                // Check for errors that should not be retried
+                if (res.status === 401) {
+                    // Authentication error - no point in retrying
+                    logger.error(`[STT] Authentication failed - check Hugging Face API key`);
+                    throw new Error(`Hugging Face Whisper API failed: ${errorText}`);
+                } else if (res.status === 400) {
+                    // Bad request - likely audio format issue, no point in retrying
+                    logger.error(`[STT] Bad request - possible audio format issue`);
+                    throw new Error(`Hugging Face Whisper API failed: ${errorText}`);
+                } else if (res.status === 503 && attempt < retries) {
                     // Service unavailable, wait and retry
                     const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff
                     logger.info(`[STT] Service unavailable, waiting ${waitTime}ms before retry...`);
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
-                } else if (res.status === 400) {
-                    // Bad request - likely audio format issue
-                    logger.error(`[STT] Bad request - possible audio format issue`);
-                    throw new Error(`Hugging Face API bad request (${res.status}): ${errorText}`);
-                } else if (res.status === 401) {
-                    // Authentication error
-                    logger.error(`[STT] Authentication failed - check Hugging Face API key`);
-                    throw new Error(`Hugging Face API authentication failed: ${errorText}`);
                 }
 
-                throw new Error(`Hugging Face API failed with status ${res.status}: ${errorText}`);
+                // For other errors, only throw on last attempt
+                if (attempt === retries) {
+                    throw new Error(`Hugging Face Whisper API failed: ${errorText}`);
+                }
+
+                // Wait before retry for other error types
+                const waitTime = Math.pow(2, attempt) * 1000;
+                logger.info(`[STT] Error ${res.status}, waiting ${waitTime}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                continue;
             }
 
             const data = await res.json();
@@ -130,17 +138,24 @@ async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: str
 
             logger.warn(`[STT] No valid text returned from Hugging Face, response:`, data);
             throw new Error('No text returned from Hugging Face Whisper');
-
         } catch (error) {
             logger.error(`[STT] Hugging Face attempt ${attempt} failed:`, error);
 
+            // Check if this is an authentication or bad request error that was thrown earlier
+            if (error instanceof Error && error.message.includes('Hugging Face Whisper API failed:')) {
+                // This is an API error that was already processed - don't retry
+                logger.error(`[STT] API error detected, not retrying: ${error.message}`);
+                throw error;
+            }
+
+            // Throw immediately on the last attempt
             if (attempt === retries) {
                 throw error;
             }
 
-            // Wait before retry (except for the last attempt)
+            // For network errors or other exceptions, wait before retry
             const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff
-            logger.info(`[STT] Waiting ${waitTime}ms before retry...`);
+            logger.info(`[STT] Network error, waiting ${waitTime}ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
         }
     }
