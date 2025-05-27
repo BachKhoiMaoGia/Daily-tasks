@@ -22,7 +22,7 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
     const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-    const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'microsoft/whisper-large-v3';
+    const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v3';
 
     logger.info(`[STT] Attempting transcription with provider: ${STT_PROVIDER}`);if (STT_PROVIDER === 'whisper') {
         // Prioritize Hugging Face if API key is available
@@ -30,7 +30,8 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
             try {
                 const result = await transcribeWithHuggingFace(buf, HUGGINGFACE_API_KEY, HUGGINGFACE_WHISPER_MODEL);
                 logger.info('[STT] ✅ Hugging Face Whisper successful');
-                return result;            } catch (error) {
+                return result;
+            } catch (error) {
                 logger.error('[STT] ❌ Hugging Face Whisper failed:', error);
 
                 // Check if we have OpenAI key (GitHub token is valid for GitHub Models)
@@ -48,7 +49,8 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
                     logger.warn('[STT] ⚠️ No OpenAI API key available for fallback');
                     throw new Error(`Hugging Face Whisper failed and no OpenAI fallback: ${(error as Error).message}`);
                 }
-            }        } else if (OPENAI_API_KEY) {
+            }
+        } else if (OPENAI_API_KEY) {
             // Only OpenAI/GitHub Models available
             try {
                 const result = await transcribeWithOpenAI(buf, OPENAI_API_KEY, OPENAI_BASE_URL, lang);
@@ -73,7 +75,8 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
  * Transcribe using Hugging Face Whisper API with retry logic
  */
 async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: string, retries = 3): Promise<string> {
-    for (let attempt = 1; attempt <= retries; attempt++) {        try {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
             logger.info(`[STT] Hugging Face attempt ${attempt}/${retries} using model: ${model}`);
             logger.info(`[STT] Audio buffer size: ${buf.length} bytes`);
 
@@ -151,14 +154,14 @@ async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: str
 async function transcribeWithOpenAI(buf: Buffer, apiKey: string, baseUrl: string | undefined, lang: string): Promise<string> {
     try {
         logger.info(`[STT] Using OpenAI API with base URL: ${baseUrl || 'https://api.openai.com'}`);
-        
+
         const form = new FormData();
         form.append('file', new Blob([buf]), 'audio.wav');
         form.append('model', 'whisper-1');
         form.append('language', lang);
 
         // Use custom base URL if provided (for GitHub Models), otherwise default OpenAI
-        const apiUrl = baseUrl 
+        const apiUrl = baseUrl
             ? `${baseUrl}/v1/audio/transcriptions`
             : 'https://api.openai.com/v1/audio/transcriptions';
 

@@ -26,7 +26,7 @@ async function transcribe(buf, lang = 'vi') {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
     const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-    const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'microsoft/whisper-large-v3';
+    const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v3';
     logger_js_1.default.info(`[STT] Attempting transcription with provider: ${STT_PROVIDER}`);
     if (STT_PROVIDER === 'whisper') {
         // Prioritize Hugging Face if API key is available
