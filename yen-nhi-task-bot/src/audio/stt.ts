@@ -47,13 +47,12 @@ async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: str
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             logger.info(`[STT] Hugging Face Inference API attempt ${attempt}/${retries} using model: ${model}`);
-            logger.info(`[STT] Audio buffer size: ${buf.length} bytes`);
-
-            // Use the traditional Inference API endpoint with raw audio buffer
+            logger.info(`[STT] Audio buffer size: ${buf.length} bytes`);            // Use the traditional Inference API endpoint with raw audio buffer
             const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'audio/wav', // Specify the audio format
                 },
                 body: buf,
                 timeout: 30000, // 30 second timeout
