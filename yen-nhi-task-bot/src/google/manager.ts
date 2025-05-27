@@ -826,6 +826,42 @@ class GoogleManager {
             } else {
                 return { success: false, error: `Google Tasks API error: ${error.message}` };
             }
+        }    }/**
+     * Tạo Task List mới trong Google Tasks
+     */
+    async createTaskList(title: string): Promise<{ success: boolean; taskListId?: string; error?: string }> {
+        try {
+            const response = await this.tasks.tasklists.insert({
+                requestBody: {
+                    title: title.trim()
+                }
+            });
+
+            logger.info('[GoogleManager] Task list created successfully:', {
+                taskListId: response.data.id,
+                title: response.data.title
+            });
+
+            return { success: true, taskListId: response.data.id };
+
+        } catch (error: any) {
+            logger.error('[GoogleManager] Error creating task list:', {
+                error: error.message,
+                code: error.code,
+                status: error.response?.status,
+                title: title
+            });
+
+            // Handle specific error cases
+            if (error.code === 401) {
+                return { success: false, error: 'Authentication failed - refresh token may be expired' };
+            } else if (error.code === 403) {
+                return { success: false, error: 'Permission denied - check Google Tasks API scopes' };
+            } else if (error.code === 400) {
+                return { success: false, error: `Invalid request: ${error.message}` };
+            } else {
+                return { success: false, error: `Google Tasks API error: ${error.message}` };
+            }
         }
     }/**
      * Lấy danh sách tasks từ Google Tasks

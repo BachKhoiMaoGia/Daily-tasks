@@ -10,6 +10,7 @@ import selectionManager, { SelectionManager } from '../google/selection';
 import { categorizeTaskType, createTaskWithConflictCheck } from './taskOperations';
 import reminderSystem from './reminderSystem';
 import db from '../db/index';
+import llmParser, { TaskExtractionResult } from './llmParser';
 
 let googleManagerInstance: GoogleManager | null = null;
 
@@ -21,7 +22,7 @@ export function initializeTaskCreation(googleManager: GoogleManager) {
 }
 
 /**
- * Enhanced task creation using Google Manager
+ * Enhanced task creation using Google Manager with intelligent LLM parsing
  */
 export async function handleTaskCreation(args: string, senderId: string) {
     try {
@@ -31,20 +32,67 @@ export async function handleTaskCreation(args: string, senderId: string) {
             return;
         }
 
-        // Parse task information using Google Manager
-        const taskInfo = googleManagerInstance.parseTaskInfo(args);
-        logger.info({ taskInfo }, '[Task] Parsed task information');
+        // First, try intelligent LLM extraction for better context understanding
+        let taskInfo;
+        let taskType: 'calendar' | 'task' | 'meeting' = 'task';
 
-        // Determine task type using smart categorization
-        const taskType = categorizeTaskType(args);
-        logger.info(`[Task] Categorized as: ${taskType}`);
+        try {
+            const llmResult = await llmParser.extractTaskFromNaturalLanguage(args, senderId);
+
+            if (llmResult.confidence > 0.7) {
+                // Convert LLM result to taskInfo format
+                taskInfo = {
+                    title: llmResult.title,
+                    dueDate: llmResult.date,
+                    dueTime: llmResult.time,
+                    attendees: [...llmResult.attendees, ...llmResult.emails],
+                    location: llmResult.location,
+                    description: llmResult.description
+                };
+
+                // Determine task type based on LLM analysis
+                if (llmResult.attendees.length > 0 || llmResult.emails.length > 0 || llmResult.meetingType) {
+                    taskType = 'meeting';
+                } else if (llmResult.date || llmResult.time) {
+                    taskType = 'calendar';
+                } else {
+                    taskType = 'task';
+                }
+
+                // Add Google Meet request if detected
+                if (llmResult.meetingType === 'google_meet') {
+                    taskInfo.description = (taskInfo.description || '') + ' [Google Meet requested]';
+                }
+
+                logger.info('[Task] LLM extraction successful:', {
+                    llmResult,
+                    taskInfo,
+                    taskType,
+                    confidence: llmResult.confidence
+                });
+            } else {
+                throw new Error('LLM confidence too low, falling back to regex');
+            }
+        } catch (llmError) {
+            logger.warn('[Task] LLM extraction failed, falling back to Google Manager parsing:', llmError);
+
+            // Fallback to original Google Manager parsing
+            taskInfo = googleManagerInstance.parseTaskInfo(args);
+            taskType = categorizeTaskType(args);
+        }
+
+        logger.info({ taskInfo, taskType }, '[Task] Final parsed task information');
 
         // Check for missing information based on task type
         const missingInfo = googleManagerInstance.checkMissingInfo(taskInfo, taskType);
 
         if (missingInfo) {
-            // Ask Boss for missing information
+            // Ask Boss for missing information with context
             logger.info({ missingInfo }, '[Task] Missing information detected');
+
+            // Set conversation context for better follow-up understanding
+            llmParser.setConversationContext(senderId, missingInfo.message, `Creating ${taskType}: ${taskInfo.title || args}`);
+
             await sendMessage(senderId, missingInfo.message);
 
             // Store partial task info with task type for later completion
@@ -93,25 +141,35 @@ export async function handleCalendarAndTaskListSelection(taskInfo: any, senderId
 
         // Format options only for what we need
         const calendarOptions = needsCalendar ? SelectionManager.formatCalendarOptions(calendars) : [];
-        const taskListOptions = needsTaskList ? SelectionManager.formatTaskListOptions(taskLists) : [];
-
-        // Handle calendar selection only if needed
+        const taskListOptions = needsTaskList ? SelectionManager.formatTaskListOptions(taskLists) : [];        // Handle calendar selection only if needed
         if (needsCalendar && !taskInfo.calendarId) {
-            if (calendarOptions.length > 1) {
-                await selectionManager.promptSelection(senderId, calendarOptions, 'calendar', taskInfo);
-                return; // Wait for user selection
-            } else if (calendarOptions.length === 1) {
-                taskInfo.calendarId = calendarOptions[0].id;
+            // AUTO-SELECT PRIMARY CALENDAR - No user prompt needed
+            const primaryCalendar = calendars.find(cal => cal.primary) || calendars.find(cal => cal.id === 'primary');
+            if (primaryCalendar) {
+                taskInfo.calendarId = primaryCalendar.id;
+                logger.info(`[Calendar] Auto-selected primary calendar: ${primaryCalendar.summary || 'primary'}`);
+            } else if (calendars.length > 0) {
+                // Fallback to first available calendar
+                taskInfo.calendarId = calendars[0].id;
+                logger.info(`[Calendar] Auto-selected first available calendar: ${calendars[0].summary}`);
             } else {
-                // Use primary calendar as fallback
+                // Use 'primary' as final fallback
                 taskInfo.calendarId = 'primary';
+                logger.info('[Calendar] Using fallback primary calendar ID');
             }
-        }
-
-        // Handle task list selection only if needed
+        }        // Handle task list selection only if needed
         if (needsTaskList && !taskInfo.taskListId) {
             if (taskListOptions.length > 1) {
-                await selectionManager.promptSelection(senderId, taskListOptions, 'tasklist', taskInfo);
+                // Add "Create New Task List" option
+                const createNewOption = {
+                    id: 'CREATE_NEW_TASKLIST',
+                    name: '➕ Tạo Task List mới',
+                    description: 'Tạo danh sách nhiệm vụ mới',
+                    type: 'tasklist' as 'tasklist'
+                };
+                const enhancedOptions = [...taskListOptions, createNewOption];
+                
+                await selectionManager.promptSelection(senderId, enhancedOptions, 'tasklist', taskInfo);
                 return; // Wait for user selection
             } else if (taskListOptions.length === 1) {
                 taskInfo.taskListId = taskListOptions[0].id;
@@ -395,7 +453,7 @@ async function createGoogleIntegrations(taskInfo: any, taskId: any, taskType: st
 }
 
 /**
- * Handle response to missing information request
+ * Enhanced response handler for missing information with LLM context awareness
  */
 export async function handleMissingInfoResponse(text: string, senderId: string) {
     try {
@@ -424,18 +482,97 @@ export async function handleMissingInfoResponse(text: string, senderId: string) 
         if (cancelPatterns.includes(normalizedText)) {
             logger.info(`[Task] Cancel command detected: "${text}"`);
             googleManagerInstance.clearPendingTask(senderId);
+            llmParser.clearConversationContext(senderId);
             await sendMessage(senderId, '❌ Đã hủy bỏ việc tạo task.');
             return true;
         }
 
-        // Update pending task with new information
+        // Use enhanced LLM parsing with conversation context
+        let parsedResponse;
+        try {
+            // Check if this is a Google Meet confirmation response
+            const contextText = llmParser.getConversationContext(senderId);
+            if (contextText && contextText.toLowerCase().includes('google meet')) {
+                // Handle Google Meet confirmation
+                if (text.toLowerCase().includes('có') ||
+                    text.toLowerCase().includes('yes') ||
+                    text.toLowerCase().includes('đồng ý')) {
+
+                    // Update description to include Google Meet request
+                    const updatedInfo = googleManagerInstance.updatePendingTask(senderId,
+                        `description: ${(pendingTask.description || '')} [Google Meet requested]`
+                    );
+
+                    // Complete task creation
+                    await createCompleteTask(updatedInfo, senderId);
+                    googleManagerInstance.clearPendingTask(senderId);
+                    llmParser.clearConversationContext(senderId);
+                    return true;
+                } else {
+                    // No Google Meet needed, just complete the task
+                    await createCompleteTask(pendingTask, senderId);
+                    googleManagerInstance.clearPendingTask(senderId);
+                    llmParser.clearConversationContext(senderId);
+                    return true;
+                }
+            }
+
+            // Parse response using LLM for better understanding
+            const llmResult = await llmParser.extractTaskFromNaturalLanguage(text, senderId);
+
+            // Convert LLM result to update string format for GoogleManager
+            let updateParts: string[] = [];
+
+            if (llmResult.title && !pendingTask.title) {
+                updateParts.push(`title: ${llmResult.title}`);
+            }
+            if (llmResult.date && !pendingTask.dueDate) {
+                updateParts.push(`dueDate: ${llmResult.date}`);
+            }
+            if (llmResult.time && !pendingTask.dueTime) {
+                updateParts.push(`dueTime: ${llmResult.time}`);
+            }
+            if (llmResult.description && !pendingTask.description) {
+                updateParts.push(`description: ${llmResult.description}`);
+            }
+            if (llmResult.location && !pendingTask.location) {
+                updateParts.push(`location: ${llmResult.location}`);
+            }
+            if ((llmResult.attendees.length > 0 || llmResult.emails.length > 0) && !pendingTask.attendees) {
+                const allAttendees = [...llmResult.attendees, ...llmResult.emails];
+                updateParts.push(`attendees: ${allAttendees.join(', ')}`);
+            }
+
+            // If no specific fields were extracted, treat as general content
+            if (updateParts.length === 0) {
+                // Determine what field is most likely missing and update it
+                if (!pendingTask.title) {
+                    updateParts.push(`title: ${text.trim()}`);
+                } else if (!pendingTask.description) {
+                    updateParts.push(`description: ${text.trim()}`);
+                } else {
+                    updateParts.push(`description: ${(pendingTask.description || '')} ${text.trim()}`);
+                }
+            }
+
+            const updateString = updateParts.join(', ');
+            logger.info('[Task] Updating pending task with:', updateString);
+
+        } catch (llmError) {
+            logger.warn('[Task] LLM parsing failed, using simple update:', llmError);
+            // Fallback to simple text append
+        }
+
+        // Update the pending task with user response
         const updatedInfo = googleManagerInstance.updatePendingTask(senderId, text);
 
-        // Check if we now have all required information using the correct task type
+        // Check if we now have all required information
         const missingInfo = googleManagerInstance.checkMissingInfo(updatedInfo, updatedInfo.taskType);
 
         if (missingInfo) {
-            // Still missing info, ask again
+            // Still missing info, ask again with context
+            llmParser.setConversationContext(senderId, missingInfo.message,
+                `Creating ${updatedInfo.taskType}: ${updatedInfo.title || 'task'}`);
             await sendMessage(senderId, missingInfo.message);
             return true;
         }
@@ -443,6 +580,7 @@ export async function handleMissingInfoResponse(text: string, senderId: string) 
         // All info complete - create the task
         await createCompleteTask(updatedInfo, senderId);
         googleManagerInstance.clearPendingTask(senderId);
+        llmParser.clearConversationContext(senderId);
         return true;
 
     } catch (error) {

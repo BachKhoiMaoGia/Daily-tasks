@@ -57,9 +57,7 @@ class SelectionManager {
             timestamp: Date.now()
         };
 
-        this.pendingSelections.set(userId, selection);
-
-        // Tạo message với danh sách options
+        this.pendingSelections.set(userId, selection);        // Tạo message với danh sách options
         const typeText = type === 'calendar' ? 'Calendar' : 'Task List';
         let message = `🔍 Tìm thấy ${options.length} ${typeText}s. Vui lòng chọn:\n\n`;
 
@@ -71,7 +69,12 @@ class SelectionManager {
             message += '\n';
         });
 
-        message += `\nTrả lời bằng số thứ tự (1-${options.length}) để chọn ${typeText.toLowerCase()}.`;
+        if (type === 'tasklist') {
+            message += `\nTrả lời bằng số thứ tự (1-${options.length}) để chọn task list.`;
+            message += `\n💡 Chọn "${options.length}" để tạo task list mới với tên tùy chỉnh.`;
+        } else {
+            message += `\nTrả lời bằng số thứ tự (1-${options.length}) để chọn ${typeText.toLowerCase()}.`;
+        }
 
         await sendMessage(userId, message);
         logger.info(`[Selection] Prompted user ${userId} to select from ${options.length} ${type}s`);
@@ -89,6 +92,51 @@ class SelectionManager {
             this.pendingSelections.delete(userId);
             await sendMessage(userId, '⏰ Timeout: Quá thời gian chọn. Vui lòng thử lại.');
             return { handled: true };
+        }
+
+        // Handle task list name input
+        if ((pending as any).type === 'tasklist-name') {
+            const taskListName = response.trim();
+            
+            if (taskListName.length < 2) {
+                await sendMessage(userId, '❌ Tên Task List quá ngắn. Vui lòng nhập tên có ít nhất 2 ký tự.');
+                return { handled: true };
+            }
+            
+            if (taskListName.length > 100) {
+                await sendMessage(userId, '❌ Tên Task List quá dài. Vui lòng nhập tên ngắn hơn 100 ký tự.');
+                return { handled: true };
+            }
+            
+            logger.info(`[Selection] Creating new task list: "${taskListName}" for user ${userId}`);
+            
+            try {
+                // Import GoogleManager dynamically to avoid circular dependency
+                const { GoogleManager } = await import('../google/manager.js');
+                const googleManager = new GoogleManager();
+                
+                // Create new task list
+                const result = await googleManager.createTaskList(taskListName);
+                
+                if (result.success && result.taskListId) {
+                    // Update context with new task list ID
+                    pending.context.taskListId = result.taskListId;
+                    
+                    const context = pending.context;
+                    this.pendingSelections.delete(userId);
+                    
+                    await sendMessage(userId, `✅ Đã tạo Task List mới: "${taskListName}"`);
+                    
+                    return { handled: true, continueTask: context };
+                } else {
+                    await sendMessage(userId, `❌ Lỗi tạo Task List: ${result.error || 'Unknown error'}`);
+                    return { handled: true };
+                }
+            } catch (error: any) {
+                logger.error('[Selection] Error creating task list:', error);
+                await sendMessage(userId, `❌ Lỗi hệ thống khi tạo Task List: ${error.message}`);
+                return { handled: true };
+            }
         }
 
         // CRITICAL FIX: Check for cancel commands first
@@ -120,10 +168,31 @@ class SelectionManager {
         if (isNaN(choice) || choice < 1 || choice > pending.options.length) {
             await sendMessage(userId, `❌ Lựa chọn không hợp lệ. Vui lòng chọn số từ 1-${pending.options.length} hoặc gõ "hủy" để hủy bỏ.`);
             return { handled: true }; // Handled but invalid
-        }
-
-        // Apply selection
+        }        // Apply selection
         const selectedOption = pending.options[choice - 1];
+        
+        // Handle "Create New Task List" option
+        if (selectedOption.id === 'CREATE_NEW_TASKLIST') {
+            logger.info(`[Selection] User ${userId} chose to create new task list`);
+            
+            // Store context with special flag
+            pending.context.createNewTaskList = true;
+            this.pendingSelections.delete(userId);
+            
+            await sendMessage(userId, '📝 Tên cho Task List mới?\nVí dụ: "Project ABC", "Cá nhân", "Công việc khẩn cấp"...');
+            
+            // Set pending task list creation
+            this.pendingSelections.set(userId, {
+                userId,
+                options: [],
+                type: 'tasklist-name',
+                context: pending.context,
+                timestamp: Date.now()
+            } as any);
+            
+            return { handled: true };
+        }
+        
         if (pending.type === 'calendar') {
             pending.context.calendarId = selectedOption.id;
         } else {
