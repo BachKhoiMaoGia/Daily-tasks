@@ -20,45 +20,43 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
     // Read environment variables at runtime, not import time
     const STT_PROVIDER = process.env.STT_PROVIDER || 'whisper';
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
     const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-    const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'openai/whisper-large-v3';
+    const HUGGINGFACE_WHISPER_MODEL = process.env.HUGGINGFACE_WHISPER_MODEL || 'microsoft/whisper-large-v3';
 
-    logger.info(`[STT] Attempting transcription with provider: ${STT_PROVIDER}`);
-
-    if (STT_PROVIDER === 'whisper') {
-        // Try Hugging Face first if API key is available
+    logger.info(`[STT] Attempting transcription with provider: ${STT_PROVIDER}`);if (STT_PROVIDER === 'whisper') {
+        // Prioritize Hugging Face if API key is available
         if (HUGGINGFACE_API_KEY) {
             try {
                 const result = await transcribeWithHuggingFace(buf, HUGGINGFACE_API_KEY, HUGGINGFACE_WHISPER_MODEL);
                 logger.info('[STT] ✅ Hugging Face Whisper successful');
-                return result;
-            } catch (error) {
+                return result;            } catch (error) {
                 logger.error('[STT] ❌ Hugging Face Whisper failed:', error);
 
-                // If we also have OpenAI key, try as fallback
+                // Check if we have OpenAI key (GitHub token is valid for GitHub Models)
                 if (OPENAI_API_KEY) {
-                    logger.info('[STT] 🔄 Falling back to OpenAI Whisper...');
+                    logger.info('[STT] 🔄 Falling back to OpenAI/GitHub Models Whisper...');
                     try {
-                        const result = await transcribeWithOpenAI(buf, OPENAI_API_KEY, lang);
-                        logger.info('[STT] ✅ OpenAI Whisper fallback successful');
+                        const result = await transcribeWithOpenAI(buf, OPENAI_API_KEY, OPENAI_BASE_URL, lang);
+                        logger.info('[STT] ✅ OpenAI/GitHub Models Whisper fallback successful');
                         return result;
                     } catch (fallbackError) {
-                        logger.error('[STT] ❌ OpenAI Whisper fallback also failed:', fallbackError);
-                        throw new Error(`Both Hugging Face and OpenAI Whisper failed. Last error: ${(fallbackError as Error).message}`);
+                        logger.error('[STT] ❌ OpenAI/GitHub Models Whisper fallback also failed:', fallbackError);
+                        throw new Error(`Both Hugging Face and OpenAI/GitHub Models Whisper failed. Last error: ${(fallbackError as Error).message}`);
                     }
                 } else {
-                    throw new Error(`Hugging Face Whisper failed: ${(error as Error).message}`);
+                    logger.warn('[STT] ⚠️ No OpenAI API key available for fallback');
+                    throw new Error(`Hugging Face Whisper failed and no OpenAI fallback: ${(error as Error).message}`);
                 }
-            }
-        } else if (OPENAI_API_KEY) {
-            // Only OpenAI available
+            }        } else if (OPENAI_API_KEY) {
+            // Only OpenAI/GitHub Models available
             try {
-                const result = await transcribeWithOpenAI(buf, OPENAI_API_KEY, lang);
-                logger.info('[STT] ✅ OpenAI Whisper successful');
+                const result = await transcribeWithOpenAI(buf, OPENAI_API_KEY, OPENAI_BASE_URL, lang);
+                logger.info('[STT] ✅ OpenAI/GitHub Models Whisper successful');
                 return result;
             } catch (error) {
-                logger.error('[STT] ❌ OpenAI Whisper failed:', error);
-                throw new Error(`OpenAI Whisper failed: ${(error as Error).message}`);
+                logger.error('[STT] ❌ OpenAI/GitHub Models Whisper failed:', error);
+                throw new Error(`OpenAI/GitHub Models Whisper failed: ${(error as Error).message}`);
             }
         } else {
             throw new Error('No STT API key provided (neither HUGGINGFACE_API_KEY nor OPENAI_API_KEY)');
@@ -75,9 +73,9 @@ export async function transcribe(buf: Buffer, lang = 'vi'): Promise<string> {
  * Transcribe using Hugging Face Whisper API with retry logic
  */
 async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: string, retries = 3): Promise<string> {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            logger.info(`[STT] Hugging Face attempt ${attempt}/${retries}`);
+    for (let attempt = 1; attempt <= retries; attempt++) {        try {
+            logger.info(`[STT] Hugging Face attempt ${attempt}/${retries} using model: ${model}`);
+            logger.info(`[STT] Audio buffer size: ${buf.length} bytes`);
 
             const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
                 method: 'POST',
@@ -89,6 +87,8 @@ async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: str
                 timeout: 30000, // 30 second timeout
             });
 
+            logger.info(`[STT] Hugging Face API response status: ${res.status}`);
+
             if (!res.ok) {
                 const errorText = await res.text();
                 logger.error(`[STT] Hugging Face API error ${res.status}: ${errorText}`);
@@ -99,21 +99,33 @@ async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: str
                     logger.info(`[STT] Service unavailable, waiting ${waitTime}ms before retry...`);
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
+                } else if (res.status === 400) {
+                    // Bad request - likely audio format issue
+                    logger.error(`[STT] Bad request - possible audio format issue`);
+                    throw new Error(`Hugging Face API bad request (${res.status}): ${errorText}`);
+                } else if (res.status === 401) {
+                    // Authentication error
+                    logger.error(`[STT] Authentication failed - check Hugging Face API key`);
+                    throw new Error(`Hugging Face API authentication failed: ${errorText}`);
                 }
 
                 throw new Error(`Hugging Face API failed with status ${res.status}: ${errorText}`);
             }
 
             const data = await res.json();
+            logger.info(`[STT] Hugging Face API response data:`, data);
 
             if (data.text && typeof data.text === 'string' && data.text.trim()) {
+                logger.info(`[STT] ✅ Transcription successful: "${data.text.trim()}"`);
                 return data.text.trim();
             }
 
             if (data.error) {
+                logger.error(`[STT] Hugging Face API returned error: ${data.error}`);
                 throw new Error(`Hugging Face API error: ${data.error}`);
             }
 
+            logger.warn(`[STT] No valid text returned from Hugging Face, response:`, data);
             throw new Error('No text returned from Hugging Face Whisper');
 
         } catch (error) {
@@ -134,16 +146,25 @@ async function transcribeWithHuggingFace(buf: Buffer, apiKey: string, model: str
 }
 
 /**
- * Transcribe using OpenAI Whisper API
+ * Transcribe using OpenAI Whisper API (or GitHub Models API)
  */
-async function transcribeWithOpenAI(buf: Buffer, apiKey: string, lang: string): Promise<string> {
+async function transcribeWithOpenAI(buf: Buffer, apiKey: string, baseUrl: string | undefined, lang: string): Promise<string> {
     try {
+        logger.info(`[STT] Using OpenAI API with base URL: ${baseUrl || 'https://api.openai.com'}`);
+        
         const form = new FormData();
         form.append('file', new Blob([buf]), 'audio.wav');
         form.append('model', 'whisper-1');
         form.append('language', lang);
 
-        const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        // Use custom base URL if provided (for GitHub Models), otherwise default OpenAI
+        const apiUrl = baseUrl 
+            ? `${baseUrl}/v1/audio/transcriptions`
+            : 'https://api.openai.com/v1/audio/transcriptions';
+
+        logger.info(`[STT] Making request to: ${apiUrl}`);
+
+        const res = await fetch(apiUrl, {
             method: 'POST',
             headers: { Authorization: `Bearer ${apiKey}` },
             body: form as any,
@@ -152,19 +173,21 @@ async function transcribeWithOpenAI(buf: Buffer, apiKey: string, lang: string): 
 
         if (!res.ok) {
             const errorText = await res.text();
+            logger.error(`[STT] OpenAI/GitHub Models API error: ${res.status} - ${errorText}`);
             throw new Error(`OpenAI API failed with status ${res.status}: ${errorText}`);
         }
 
         const data = await res.json();
+        logger.info(`[STT] OpenAI/GitHub Models response:`, data);
 
         if (data.text && typeof data.text === 'string' && data.text.trim()) {
             return data.text.trim();
         }
 
-        throw new Error('No text returned from OpenAI Whisper');
+        throw new Error('No text returned from OpenAI/GitHub Models Whisper');
 
     } catch (error) {
-        logger.error('[STT] OpenAI Whisper error:', error);
+        logger.error('[STT] OpenAI/GitHub Models Whisper error:', error);
         throw error;
     }
 }
