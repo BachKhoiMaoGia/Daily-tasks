@@ -29,13 +29,13 @@ router.get('/ping', (req, res) => {
 router.post('/debug/trigger-checklist', async (req, res) => {
     try {
         logger.info('[Debug] Manual daily checklist trigger requested');
-        
+
         // Import sendChecklist function dynamically
         const { sendChecklist } = await import('../scheduler/tasks.js');
-        
+
         // Trigger the daily checklist
         await sendChecklist();
-        
+
         logger.info('[Debug] Daily checklist sent successfully');
         res.json({
             success: true,

@@ -60,6 +60,31 @@ router.get('/ping', (req, res) => {
         message: 'Server is running healthy! 🚀'
     });
 });
+// Debug endpoint to manually trigger daily checklist for testing
+router.post('/debug/trigger-checklist', async (req, res) => {
+    try {
+        logger_js_1.default.info('[Debug] Manual daily checklist trigger requested');
+        // Import sendChecklist function dynamically
+        const { sendChecklist } = await Promise.resolve().then(() => __importStar(require('../scheduler/tasks.js')));
+        // Trigger the daily checklist
+        await sendChecklist();
+        logger_js_1.default.info('[Debug] Daily checklist sent successfully');
+        res.json({
+            success: true,
+            message: 'Daily checklist triggered successfully',
+            timestamp: new Date().toISOString()
+        });
+    }
+    catch (err) {
+        logger_js_1.default.error('[Debug] Daily checklist trigger failed:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Daily checklist trigger failed',
+            error: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
 function getTaskMap() {
     const rows = index_js_4.default.prepare('SELECT * FROM tasks').all();
     const map = {};

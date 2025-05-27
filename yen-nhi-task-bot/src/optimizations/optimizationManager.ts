@@ -44,7 +44,7 @@ class UnifiedOptimizationManager {
         enableSmartSelection: true,
         enableEnhancedFallback: true,
         enableConversationOptimizer: true,
-        confidenceThreshold: 0.7,
+        confidenceThreshold: 0.6, // Giảm từ 0.7 xuống 0.6 để tăng tỷ lệ tránh LLM
         maxFallbackAttempts: 3
     };
 
@@ -110,9 +110,7 @@ class UnifiedOptimizationManager {
                     logger.info(`[Optimization] Pre-filter blocked non-task message: ${preFilterResult.reason}`);
                     return this.finalizeResult(result, startTime);
                 }
-            }
-
-            // STEP 2: Confidence-based parsing
+            }            // STEP 2: Confidence-based parsing
             if (this.config.enableConfidenceParser) {
                 const parseResult = await confidenceParser.parseWithConfidence(message, userId);
                 result.optimizations.confidenceParserUsed = true;
@@ -125,9 +123,32 @@ class UnifiedOptimizationManager {
                         result.performance.llmCallsAvoided++;
                     }
 
+                    // STEP 2.1: Apply conversation optimization for task messages
+                    if (parseResult.isTask !== false && this.config.enableConversationOptimizer) {
+                        const flowResult = conversationOptimizer.optimizeConversationFlow(
+                            userId,
+                            message,
+                            parseResult
+                        );
+                        result.optimizations.conversationOptimized = true;
+
+                        const originalQuestionCount = 6; // Typical max questions
+                        const reductionCount = Math.max(0, originalQuestionCount - flowResult.questionsToAsk.length);
+                        this.stats.conversationStepsReduced += reductionCount;
+                        result.performance.conversationStepsReduced = reductionCount;
+
+                        // Merge optimized task data back
+                        const optimizedResult = { ...parseResult, ...flowResult.optimizedTask };
+                        result.result = optimizedResult;
+                        result.confidence = Math.max(parseResult.confidence, flowResult.confidence);
+
+                        logger.info(`[Optimization] Conversation optimization applied, steps reduced: ${reductionCount}`);
+                    } else {
+                        result.result = parseResult;
+                        result.confidence = parseResult.confidence;
+                    }
+
                     result.success = true;
-                    result.result = parseResult;
-                    result.confidence = parseResult.confidence;
 
                     logger.info(`[Optimization] Confidence parser succeeded: ${parseResult.source} (${parseResult.confidence})`);
                     return this.finalizeResult(result, startTime);

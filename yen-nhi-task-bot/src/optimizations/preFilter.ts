@@ -18,13 +18,21 @@ class MessagePreFilter {
         /^(xin chào|chào|hi|hello|good morning|good afternoon|good evening)$/i,
         /^(chào bạn|chào em|chào anh|chào chị)$/i,
         /^(tôi|mình|em) (tên|là) /i
-    ];
-
-    // Common question patterns that are NOT tasks
+    ];    // Common question patterns that are NOT tasks
     private questionPatterns = [
         /^(bạn|em|anh|chị) (là ai|tên gì|làm gì|ở đâu)/i,
         /^(ai|gì|sao|tại sao|như thế nào|thế nào)/i,
         /^(có thể|bạn có thể) (giúp|hỗ trợ|làm gì)/i
+    ];
+
+    // Command patterns - these are NOT tasks but system commands
+    private commandPatterns = [
+        /^\/?(list|lisy|danh sách|ds)(\s+.*)?$/i,
+        /^\/?(stats|thống kê|tk)$/i,
+        /^\/?(help|giúp|hướng dẫn)$/i,
+        /^\/?(done|xong)\s+\d+/i,
+        /^\/?(delete|del|xóa)\s+\d+/i,
+        /^\/?(edit|sửa)\s+\d+/i
     ];
 
     // Task indicator patterns
@@ -65,15 +73,22 @@ class MessagePreFilter {
                 reason: 'Message too short',
                 quickReply: 'Xin chào! Bạn cần tôi giúp gì? Hãy mô tả công việc hoặc lịch hẹn bạn muốn tạo.'
             };
-        }
-
-        // Check for pure greetings
+        }        // Check for pure greetings
         if (this.greetingPatterns.some(pattern => pattern.test(normalizedMessage))) {
             return {
                 isTaskLikely: false,
                 confidence: 0.85,
                 reason: 'Pure greeting detected',
                 quickReply: 'Xin chào! Tôi là trợ lý quản lý công việc. Bạn muốn tạo task hay lịch hẹn gì không?'
+            };
+        }
+
+        // Check for commands - these should be handled by system, not as tasks
+        if (this.commandPatterns.some(pattern => pattern.test(normalizedMessage))) {
+            return {
+                isTaskLikely: false,
+                confidence: 0.95,
+                reason: 'System command detected'
             };
         }
 

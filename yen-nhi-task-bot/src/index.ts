@@ -260,6 +260,38 @@ async function main() {    // Initialize Google Manager
                 (optimizationResult.result.isTask === false && optimizationResult.result.quickReply)) {
                 await sendMessage(config.bossZaloId || '', optimizationResult.result.quickReply);
                 return;
+            }            // If this is a task, apply Smart Selection and Conversation Optimizer
+            if (optimizationResult.success && optimizationResult.result.title) {                // Get available calendars and task lists - FIX: Use await for async methods
+                const availableCalendars = await googleManager.getCalendars();
+                const availableTaskLists = await googleManager.getTaskLists();
+
+                // Apply task creation optimizations (Smart Selection + Conversation Optimizer)
+                const taskOptimizationResult = await optimizationManager.optimizeTaskCreation(
+                    optimizationResult.result,
+                    senderId,
+                    availableCalendars,
+                    availableTaskLists
+                );
+
+                logger.info({
+                    smartSelectionUsed: taskOptimizationResult.optimizations.smartSelectionUsed,
+                    conversationOptimized: taskOptimizationResult.optimizations.conversationOptimized,
+                    conversationStepsReduced: taskOptimizationResult.performance.conversationStepsReduced
+                }, '[Optimization] Task creation optimization applied');
+
+                // If Smart Selection was successful, use the optimized task
+                if (taskOptimizationResult.success && taskOptimizationResult.result.optimizedTask) {
+                    const optimizedTask = taskOptimizationResult.result.optimizedTask;
+
+                    // Check if we have auto-selected calendar/tasklist
+                    if (optimizedTask.calendarId || optimizedTask.taskListId) {
+                        logger.info('[Smart Selection] Auto-selected calendar/tasklist, proceeding with task creation');
+
+                        // Create task directly with Smart Selection result
+                        await handleCalendarAndTaskListSelection(optimizedTask, senderId);
+                        return;
+                    }
+                }
             }
 
             // If optimization didn't produce a clear command, try enhanced parsing

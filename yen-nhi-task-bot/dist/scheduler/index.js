@@ -11,8 +11,12 @@ exports.startScheduler = startScheduler;
 const node_cron_1 = __importDefault(require("node-cron"));
 const tasks_js_1 = require("./tasks.js");
 function startScheduler() {
-    // 07:00 daily summary
-    node_cron_1.default.schedule('0 7 * * *', () => { (0, tasks_js_1.sendChecklist)().catch(() => { }); });
-    // Every minute: near-due (15')
-    node_cron_1.default.schedule('* * * * *', () => { (0, tasks_js_1.sendNearDue)().catch(() => { }); });
+    // 08:00 daily checklist (UTC+7 timezone) - Boss yêu cầu 8h sáng
+    node_cron_1.default.schedule('0 8 * * *', () => { (0, tasks_js_1.sendChecklist)().catch(() => { }); }, {
+        timezone: 'Asia/Ho_Chi_Minh'
+    });
+    // Every minute: near-due (15') - with timezone context
+    node_cron_1.default.schedule('* * * * *', () => { (0, tasks_js_1.sendNearDue)().catch(() => { }); }, {
+        timezone: 'Asia/Ho_Chi_Minh'
+    });
 }

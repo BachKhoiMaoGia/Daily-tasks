@@ -6,8 +6,13 @@ import cron from 'node-cron';
 import { sendChecklist, sendNearDue } from './tasks.js';
 
 export function startScheduler() {
-  // 07:00 daily summary
-  cron.schedule('0 7 * * *', () => { sendChecklist().catch(() => {}); });
-  // Every minute: near-due (15')
-  cron.schedule('* * * * *', () => { sendNearDue().catch(() => {}); });
+    // 08:00 daily checklist (UTC+7 timezone) - Boss yêu cầu 8h sáng
+    cron.schedule('0 8 * * *', () => { sendChecklist().catch(() => { }); }, {
+        timezone: 'Asia/Ho_Chi_Minh'
+    });
+
+    // Every minute: near-due (15') - with timezone context
+    cron.schedule('* * * * *', () => { sendNearDue().catch(() => { }); }, {
+        timezone: 'Asia/Ho_Chi_Minh'
+    });
 }

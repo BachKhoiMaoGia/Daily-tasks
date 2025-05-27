@@ -5,6 +5,7 @@
 
 import logger from '../utils/logger.js';
 import { sendMessage } from '../zalo/index.js';
+import llmParser, { LLMParseResult } from './llmParser.js';
 
 // Conversation states
 interface ConversationState {
@@ -20,16 +21,16 @@ interface ConversationState {
 const activeConversations = new Map<string, ConversationState>();
 
 /**
- * Analyze task content for missing critical information
+ * Analyze task content for missing critical information using LLM when available
  */
-export function analyzeTaskInfo(content: string): {
+export async function analyzeTaskInfo(content: string): Promise<{
     hasTitle: boolean;
     hasDate: boolean;
     hasTime: boolean;
     extractedDate?: string;
     extractedTime?: string;
     missingInfo: string[];
-} {
+}> {
     const analysis = {
         hasTitle: true, // If they're creating a task, assume content is the title
         hasDate: false,
@@ -37,6 +38,69 @@ export function analyzeTaskInfo(content: string): {
         extractedDate: undefined as string | undefined,
         extractedTime: undefined as string | undefined,
         missingInfo: [] as string[]
+    };
+
+    try {
+        // Try to extract date using LLM parser
+        const dateParseResult = await llmParser.parseResponse(content, 'date', 'Extracting date from task description');
+        if (dateParseResult.intent === 'date' && dateParseResult.extractedValue && dateParseResult.confidence > 0.6) {
+            analysis.hasDate = true;
+            analysis.extractedDate = dateParseResult.extractedValue;
+        }
+
+        // Try to extract time using LLM parser
+        const timeParseResult = await llmParser.parseResponse(content, 'time', 'Extracting time from task description');
+        if (timeParseResult.intent === 'time' && timeParseResult.extractedValue && timeParseResult.confidence > 0.6) {
+            analysis.hasTime = true;
+            analysis.extractedTime = timeParseResult.extractedValue;
+        }
+
+        logger.info('[Conversation] LLM analysis results:', {
+            content,
+            dateResult: dateParseResult,
+            timeResult: timeParseResult,
+            analysis
+        });
+
+    } catch (error) {
+        logger.warn('[Conversation] LLM analysis failed, falling back to regex:', error);
+
+        // Fallback to original regex-based analysis
+        const fallbackAnalysis = analyzeTaskInfoRegex(content);
+        analysis.hasDate = fallbackAnalysis.hasDate;
+        analysis.hasTime = fallbackAnalysis.hasTime;
+        analysis.extractedDate = fallbackAnalysis.extractedDate;
+        analysis.extractedTime = fallbackAnalysis.extractedTime;
+    }
+
+    // Determine missing info
+    if (!analysis.hasDate) {
+        analysis.missingInfo.push('date');
+    }
+
+    // Only ask for time if it's a scheduled task (has date or time keywords)
+    const hasScheduleKeywords = /lúc|vào|ngày|giờ|sáng|chiều|tối|am|pm/i.test(content);
+    if (hasScheduleKeywords && !analysis.hasTime) {
+        analysis.missingInfo.push('time');
+    }
+
+    return analysis;
+}
+
+/**
+ * Fallback regex-based analysis (original function logic)
+ */
+function analyzeTaskInfoRegex(content: string): {
+    hasDate: boolean;
+    hasTime: boolean;
+    extractedDate?: string;
+    extractedTime?: string;
+} {
+    const analysis = {
+        hasDate: false,
+        hasTime: false,
+        extractedDate: undefined as string | undefined,
+        extractedTime: undefined as string | undefined
     };
 
     // Check for date patterns
@@ -82,16 +146,7 @@ export function analyzeTaskInfo(content: string): {
         }
     }
 
-    // Determine missing info
-    if (!analysis.hasDate) {
-        analysis.missingInfo.push('date');
-    }
-
-    // Only ask for time if it's a scheduled task (has date or time keywords)
-    const hasScheduleKeywords = /lúc|vào|ngày|giờ|sáng|chiều|tối|am|pm/i.test(content);
-    if (hasScheduleKeywords && !analysis.hasTime) {
-        analysis.missingInfo.push('time');
-    } return analysis;
+    return analysis;
 }
 
 /**
@@ -160,7 +215,7 @@ export async function startConversationalTask(userId: string, content: string): 
  * Legacy conversational task creation (fallback)
  */
 async function startConversationalTaskLegacy(userId: string, content: string): Promise<boolean> {
-    const analysis = analyzeTaskInfo(content);
+    const analysis = await analyzeTaskInfo(content);
 
     // If we have all info, create task directly
     if (analysis.missingInfo.length === 0) {
@@ -277,26 +332,37 @@ export async function handleConversationResponse(userId: string, response: strin
         activeConversations.delete(userId);
         await sendMessage(userId, '❌ Đã hủy bỏ việc tạo task.');
         return { handled: true };
-    }
-
-    try {
+    } try {
         if (conversation.stage === 'awaiting_deadline') {
-            // Parse date response
-            const dateResult = parseDateResponse(responseText);
+            // Use LLM parser for more flexible date parsing
+            const parseResult = await llmParser.parseResponse(response, 'date', `Parsing deadline for task: "${conversation.taskContent}"`);
 
-            if (dateResult.skip) {
+            logger.info(`[Conversation] LLM parse result for deadline:`, parseResult);
+
+            if (parseResult.intent === 'cancel') {
+                activeConversations.delete(userId);
+                await sendMessage(userId, '❌ Đã hủy bỏ việc tạo task.');
+                return { handled: true };
+            }
+
+            if (parseResult.intent === 'skip') {
                 // User doesn't want deadline
                 conversation.dueDate = undefined;
-            } else if (dateResult.date) {
-                conversation.dueDate = dateResult.date;
+            } else if (parseResult.intent === 'date' && parseResult.extractedValue) {
+                conversation.dueDate = parseResult.extractedValue;
             } else {
-                // Invalid date format
-                await sendMessage(userId,
-                    `❌ Không hiểu thời gian "${response}". Vui lòng thử lại:\n\n` +
+                // Invalid date format or unclear intent
+                const errorMsg = parseResult.confidence < 0.5
+                    ? `❌ Không hiểu thời gian "${response}". Vui lòng thử lại:\n\n` +
                     `💡 Ví dụ: "hôm nay", "ngày mai", "thứ hai", "2025-05-26"\n` +
                     `Hoặc "không cần deadline" nếu không có thời hạn.\n` +
                     `Gõ "hủy" để hủy bỏ tạo task.`
-                );
+                    : `❌ Tôi hiểu bạn muốn nói về thời gian nhưng không rõ cụ thể. Vui lòng thử lại:\n\n` +
+                    `💡 Ví dụ: "hôm nay", "ngày mai", "thứ hai", "15/6"\n` +
+                    `Hoặc "không cần deadline" nếu không có thời hạn.\n` +
+                    `Gõ "hủy" để hủy bỏ tạo task.`;
+
+                await sendMessage(userId, errorMsg);
                 return { handled: true, continueConversation: true };
             }
 
@@ -323,20 +389,33 @@ export async function handleConversationResponse(userId: string, response: strin
         }
 
         else if (conversation.stage === 'awaiting_time') {
-            // Parse time response
-            const timeResult = parseTimeResponse(responseText);
+            // Use LLM parser for more flexible time parsing
+            const parseResult = await llmParser.parseResponse(response, 'time', `Parsing time for task: "${conversation.taskContent}" on ${conversation.dueDate}`);
 
-            if (timeResult.skip) {
+            logger.info(`[Conversation] LLM parse result for time:`, parseResult);
+
+            if (parseResult.intent === 'cancel') {
+                activeConversations.delete(userId);
+                await sendMessage(userId, '❌ Đã hủy bỏ việc tạo task.');
+                return { handled: true };
+            }
+
+            if (parseResult.intent === 'skip') {
                 conversation.dueTime = undefined;
-            } else if (timeResult.time) {
-                conversation.dueTime = timeResult.time;
+            } else if (parseResult.intent === 'time' && parseResult.extractedValue) {
+                conversation.dueTime = parseResult.extractedValue;
             } else {
-                await sendMessage(userId,
-                    `❌ Không hiểu thời gian "${response}". Vui lòng thử lại:\n\n` +
+                const errorMsg = parseResult.confidence < 0.5
+                    ? `❌ Không hiểu thời gian "${response}". Vui lòng thử lại:\n\n` +
                     `💡 Ví dụ: "15:30", "3 giờ chiều", "sáng"\n` +
                     `Hoặc "không cần giờ cụ thể"\n` +
                     `Gõ "hủy" để hủy bỏ tạo task.`
-                );
+                    : `❌ Tôi hiểu bạn muốn nói về thời gian nhưng không rõ cụ thể. Vui lòng thử lại:\n\n` +
+                    `💡 Ví dụ: "15:30", "3 giờ chiều", "sáng"\n` +
+                    `Hoặc "không cần giờ cụ thể"\n` +
+                    `Gõ "hủy" để hủy bỏ tạo task.`;
+
+                await sendMessage(userId, errorMsg);
                 return { handled: true, continueConversation: true };
             }
 

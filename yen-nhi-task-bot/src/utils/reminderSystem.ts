@@ -23,9 +23,7 @@ class TaskReminderSystem {
 
     constructor() {
         logger.info('[Reminder] Task Reminder System initialized');
-    }
-
-    /**
+    }    /**
      * Thêm reminder cho task mới
      */
     addReminder(taskInfo: TaskInfo, userId: string, taskId: string, type: 'task' | 'calendar'): void {
@@ -35,24 +33,26 @@ class TaskReminderSystem {
                 return;
             }
 
-            // Tính toán thời gian nhắc nhở (trước 1 giờ cho calendar events, trước 1 ngày cho tasks)
-            const dueDate = new Date(taskInfo.dueDate);
+            // Tính toán thời gian nhắc nhở với UTC+7 timezone
+            const dueDate = new Date(taskInfo.dueDate + 'T00:00:00+07:00');
 
             if (taskInfo.dueTime) {
                 const [hours, minutes] = taskInfo.dueTime.split(':').map(Number);
-                dueDate.setHours(hours, minutes, 0, 0);
+                // Set time in UTC+7 timezone
+                dueDate.setUTCHours(hours - 7, minutes, 0, 0); // Convert to UTC
             }
 
             let reminderTime: Date;
 
             if (type === 'calendar') {
-                // Nhắc trước 1 giờ cho calendar events
+                // Nhắc trước 1 giờ cho calendar events (in UTC+7)
                 reminderTime = new Date(dueDate.getTime() - 60 * 60 * 1000);
             } else {
-                // Nhắc trước 1 ngày cho tasks (lúc 9h sáng)
+                // Nhắc trước 1 ngày cho tasks (lúc 9h sáng UTC+7)
                 reminderTime = new Date(dueDate);
                 reminderTime.setDate(reminderTime.getDate() - 1);
-                reminderTime.setHours(9, 0, 0, 0);
+                // Set to 9 AM UTC+7 (2 AM UTC)
+                reminderTime.setUTCHours(2, 0, 0, 0);
             }
 
             // Không tạo reminder cho quá khứ
@@ -76,6 +76,7 @@ class TaskReminderSystem {
                 taskId,
                 title: taskInfo.title,
                 reminderTime: reminderTime.toISOString(),
+                reminderTimeLocal: reminderTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
                 type
             });
 

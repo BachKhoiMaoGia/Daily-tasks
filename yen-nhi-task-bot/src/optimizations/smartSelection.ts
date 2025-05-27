@@ -204,9 +204,7 @@ class SmartSelectionManager {
             reasoning: 'No user habit match found',
             autoSelected: false
         };
-    }
-
-    /**
+    }    /**
      * Select based on content analysis
      */
     private selectByContentAnalysis(message: string): SelectionResult {
@@ -216,6 +214,7 @@ class SmartSelectionManager {
 
         if (hasTimeReference || hasLocationReference || hasAttendeeReference) {
             return {
+                calendarId: 'primary', // Default to primary calendar for events
                 confidence: 0.7,
                 reasoning: 'Content suggests calendar event (time/location/attendees)',
                 autoSelected: true
@@ -225,6 +224,7 @@ class SmartSelectionManager {
         const hasTaskReference = /\b(làm|hoàn thành|deadline|nộp|submit|task|nhiệm vụ)\b/i.test(message);
         if (hasTaskReference) {
             return {
+                taskListId: '@default', // Default to default task list for tasks
                 confidence: 0.65,
                 reasoning: 'Content suggests task (action/deadline)',
                 autoSelected: true
@@ -351,7 +351,7 @@ class SmartSelectionManager {
         };
 
         let totalAutoSelections = 0;
-        let totalSelections = 0;        for (const userPref of Array.from(this.userPreferences.values())) {
+        let totalSelections = 0; for (const userPref of Array.from(this.userPreferences.values())) {
             const patternCount = Object.keys(userPref.patterns).length;
             stats.totalPatterns += patternCount;
             totalSelections += userPref.totalSelections;

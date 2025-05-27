@@ -14,6 +14,9 @@ interface ParsedResult {
     time?: string;
     description?: string;
     meetingType?: 'google_meet' | 'zoom' | 'teams' | 'in_person';
+    cmd?: string;
+    args?: string;
+    isTask?: boolean;
     confidence: number;
     source: 'regex' | 'llm' | 'cache';
     reasoning: string;
@@ -28,10 +31,39 @@ interface CacheEntry {
 class ConfidenceBasedParser {
     private parseCache = new Map<string, CacheEntry>();
     private readonly CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
-    private readonly MAX_CACHE_SIZE = 1000;
-
-    // High-confidence regex patterns for common task formats
+    private readonly MAX_CACHE_SIZE = 1000;    // High-confidence regex patterns for common task formats
     private highConfidencePatterns = [
+        // Simple commands with very high confidence
+        {
+            pattern: /^\/?(list|lisy|danh sách|ds)(\s+.*)?$/i,
+            confidence: 0.99,
+            extractor: (match: RegExpMatchArray) => ({
+                cmd: 'list',
+                args: (match[2] || '').trim(),
+                isTask: false,
+                reasoning: 'High-confidence list command'
+            })
+        },
+        {
+            pattern: /^\/?(stats|thống kê|tk)$/i,
+            confidence: 0.99,
+            extractor: (match: RegExpMatchArray) => ({
+                cmd: 'stats',
+                args: '',
+                isTask: false,
+                reasoning: 'High-confidence stats command'
+            })
+        },
+        {
+            pattern: /^\/?(help|giúp|hướng dẫn)$/i,
+            confidence: 0.99,
+            extractor: (match: RegExpMatchArray) => ({
+                cmd: 'help',
+                args: '',
+                isTask: false,
+                reasoning: 'High-confidence help command'
+            })
+        },
         // Meeting patterns
         {
             pattern: /^(họp|meeting|gặp)\s+(.+?)\s+(lúc|vào)\s+(\d{1,2}:\d{2}|\d{1,2}h\d{0,2})/i,
@@ -129,11 +161,10 @@ class ConfidenceBasedParser {
 
         // Fallback to LLM for complex cases
         return this.createLLMFallbackResult(normalizedMessage);
-    }
-
-    /**
+    }    /**
      * Try high-confidence regex patterns
-     */    private tryHighConfidencePatterns(message: string): ParsedResult | null {
+     */
+    private tryHighConfidencePatterns(message: string): ParsedResult | null {
         for (const pattern of this.highConfidencePatterns) {
             const match = message.match(pattern.pattern);
             if (match) {
@@ -147,6 +178,9 @@ class ConfidenceBasedParser {
                     time: extracted.time || '',
                     description: extracted.description || '',
                     meetingType: extracted.meetingType || 'google_meet',
+                    cmd: extracted.cmd || 'add',
+                    args: extracted.args || '',
+                    isTask: extracted.isTask !== false, // Default to true unless explicitly false
                     confidence: pattern.confidence,
                     source: 'regex',
                     reasoning: extracted.reasoning || 'High-confidence pattern match'
@@ -154,9 +188,7 @@ class ConfidenceBasedParser {
             }
         }
         return null;
-    }
-
-    /**
+    }    /**
      * Try medium-confidence patterns and combine results
      */
     private tryMediumConfidencePatterns(message: string): ParsedResult | null {
@@ -164,6 +196,7 @@ class ConfidenceBasedParser {
             title: message,
             attendees: [],
             emails: [],
+            isTask: true,
             confidence: 0,
             source: 'regex',
             reasoning: 'Combined medium-confidence patterns'
@@ -188,9 +221,7 @@ class ConfidenceBasedParser {
         }
 
         return null;
-    }
-
-    /**
+    }    /**
      * Create fallback result that indicates LLM processing needed
      */
     private createLLMFallbackResult(message: string): ParsedResult {
@@ -198,6 +229,7 @@ class ConfidenceBasedParser {
             title: message,
             attendees: [],
             emails: [],
+            isTask: true,
             confidence: 0.3,
             source: 'llm',
             reasoning: 'Complex message requires LLM analysis'
