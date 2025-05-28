@@ -6,6 +6,7 @@ import express from 'express';
 import { config } from './config/index';
 import logger from './utils/logger';
 import { login, onMessage, sendMessage } from './zalo/index';
+import { ThreadType } from 'zca-js'; // Import ThreadType constants for message filtering
 import { downloadAudio } from './audio/audioDownloader';
 import { convertToWav } from './audio/convert';
 import { transcribe } from './audio/stt';
@@ -83,42 +84,71 @@ async function main() {    // Initialize Google Manager
         try {
             // Extract text and sender ID from message
             let plainText = '';
-            const senderId = msg.uidFrom || msg.data?.uidFrom || msg.senderId; logger.info({ zaloMsg: msg }, '[Zalo] Nhận message');            // ENHANCED MESSAGE FILTERING
+            const senderId = msg.uidFrom || msg.data?.uidFrom || msg.senderId; logger.info({ zaloMsg: msg }, '[Zalo] Nhận message');            // ENHANCED MESSAGE FILTERING - CRITICAL GROUP CONVERSATION FIX
             // 1. Check sender ID
             if (!senderId || senderId !== config.bossZaloId) {
                 logger.info(`[Zalo] IGNORED - Message from non-Boss user: ${senderId} vs Boss: ${config.bossZaloId}`);
                 return;
+            }            // 2. CRITICAL: Check message type first - Only accept User-to-User messages (ThreadType.User)
+            // This is the most reliable way to filter out group messages according to zca-js docs
+            if (msg.type && msg.type !== ThreadType.User) {
+                logger.info(`[Zalo] IGNORED - Non-private message type: ${msg.type} (ThreadType.Group=${ThreadType.Group}, ThreadType.User=${ThreadType.User})`);
+                return;
             }
 
-            // 2. Check if it's a group message (should reject group messages)
-            if (msg.data?.isGroup || msg.groupId || msg.data?.groupId) {
+            // 3. Secondary check: Explicit group message indicators
+            if (msg.data?.isGroup || msg.groupId || msg.data?.groupId || msg.isGroup) {
                 logger.info(`[Zalo] IGNORED - Group message from Boss (groupId: ${msg.groupId || msg.data?.groupId})`);
                 return;
             }
 
-            // 3. Enhanced thread filtering - Only process messages from dedicated Bot-Boss chat
+            // 4. Enhanced thread filtering - Only process messages from dedicated Bot-Boss chat
             const threadId = msg.threadId || msg.data?.threadId;
-            const isPrivateChat = !msg.data?.isGroup && !msg.groupId && !msg.data?.groupId;
+            const isPrivateChat = !msg.data?.isGroup && !msg.groupId && !msg.data?.groupId && !msg.isGroup;
+
+            // Additional verification: ThreadId should be Boss's UID for private chats
+            if (threadId && threadId !== config.bossZaloId) {
+                logger.info(`[Zalo] IGNORED - Message from unexpected thread ${threadId} (expecting Boss ID: ${config.bossZaloId})`);
+                return;
+            }
 
             if (!isPrivateChat && threadId) {
                 logger.info(`[Zalo] IGNORED - Message from thread ${threadId} that is not private Boss chat`);
                 return;
             }
 
-            // 4. Check message type validity - Accept text and voice messages
+            // 5. Check message type validity - Accept text and voice messages
             const msgType = msg.data?.msgType || msg.type;
             if (msgType && !['chat.text', 'chat.voice', 'webchat'].includes(msgType)) {
                 logger.info(`[Zalo] IGNORED - Unsupported message type: ${msgType}`);
                 return;
             }
 
-            // 5. Additional validation: Only accept messages that are actual content from Boss
+            // 6. Additional validation: Only accept messages that are actual content from Boss
             if (msg.data?.isEvent || msg.data?.isSystemMessage) {
                 logger.info(`[Zalo] IGNORED - System/event message type`);
                 return;
             }
 
-            logger.info(`[Zalo] ✅ PROCESSING - Valid private message from Boss: ${senderId} (thread: ${threadId || 'direct'})`);
+            // 7. Final safety check: Reject if message appears to be from group conversation context
+            // Check for common group conversation patterns
+            const msgContent = msg.text || msg.data?.content || '';
+            if (typeof msgContent === 'string') {
+                // Patterns that suggest group conversation context
+                const groupConversationPatterns = [
+                    /\b(bạn|anh|chị|em)\s+(.*?)\s+(hỏi|nói|kể|báo)/i, // "Bạn X hỏi/nói..."
+                    /\b(ai|người)\s+(.*?)\s+(đó|kia|này)/i, // "Ai đó...", "Người kia..."
+                    /\b(mọi người|các bạn|nhóm)/i, // Group references
+                    /\b(họp|meeting|cuộc họp)/i // Meeting references
+                ];
+
+                if (groupConversationPatterns.some(pattern => pattern.test(msgContent))) {
+                    logger.info(`[Zalo] IGNORED - Message contains group conversation pattern: "${msgContent.substring(0, 100)}..."`);
+                    return;
+                }
+            }
+
+            logger.info(`[Zalo] ✅ PROCESSING - Valid private message from Boss: ${senderId} (thread: ${threadId || 'direct'}, type: ${msg.type || 'unknown'})`);
 
             // Handle different message types
             if (msg.data?.msgType === 'chat.voice' || (msg.data?.content && typeof msg.data.content === 'object' && msg.data.content.href)) {
