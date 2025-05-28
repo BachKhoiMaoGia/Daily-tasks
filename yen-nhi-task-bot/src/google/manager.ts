@@ -650,8 +650,7 @@ class GoogleManager {
         }
     }    /**
      * Tạo event trong Google Calendar với hỗ trợ Google Meet và time ranges
-     */
-    async createCalendarEvent(taskInfo: TaskInfo): Promise<{ success: boolean; eventId?: string; error?: string }> {
+     */    async createCalendarEvent(taskInfo: TaskInfo): Promise<{ success: boolean; eventId?: string; error?: string }> {
         try {
             // Validate required fields
             if (!taskInfo.title) {
@@ -662,6 +661,24 @@ class GoogleManager {
             }
             if (!taskInfo.dueTime) {
                 return { success: false, error: 'Missing due time' };
+            }
+
+            // Convert "today" to proper date format
+            let dueDate = taskInfo.dueDate;
+            if (dueDate === 'today') {
+                const today = new Date();
+                // Convert to Asia/Ho_Chi_Minh timezone
+                const vnTime = new Date(today.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+                dueDate = vnTime.toISOString().split('T')[0]; // YYYY-MM-DD format
+                logger.info(`[GoogleManager] Converted "today" to: ${dueDate}`);
+            }
+
+            // Validate date format (YYYY-MM-DD)
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+                return { success: false, error: `Invalid date format: ${dueDate}. Expected YYYY-MM-DD` };
+            }            // Validate time format (HH:MM)
+            if (!/^\d{2}:\d{2}$/.test(taskInfo.dueTime)) {
+                return { success: false, error: `Invalid time format: ${taskInfo.dueTime}. Expected HH:MM` };
             }
 
             const isGoogleMeetRequested = taskInfo.description?.includes('[Google Meet will be auto-generated]');
@@ -684,20 +701,33 @@ class GoogleManager {
                 summary: taskInfo.title,
                 description: taskInfo.description?.replace(' [Google Meet will be auto-generated]', '').replace(' [Google Meet requested]', '') || '',
                 start: {
-                    dateTime: `${taskInfo.dueDate}T${startTime}:00`,
+                    dateTime: `${dueDate}T${startTime}:00`,
                     timeZone: 'Asia/Ho_Chi_Minh',
                 },
                 end: {
-                    dateTime: `${taskInfo.dueDate}T${endTime}:00`,
+                    dateTime: `${dueDate}T${endTime}:00`,
                     timeZone: 'Asia/Ho_Chi_Minh',
-                }, location: taskInfo.location, attendees: taskInfo.attendees?.filter(attendee => {
-                    // Only include valid email addresses
-                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                }
+            };
+
+            // Add location if provided
+            if (taskInfo.location) {
+                event.location = taskInfo.location;
+            }
+
+            // Add attendees if provided (filter valid emails)
+            if (taskInfo.attendees && taskInfo.attendees.length > 0) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                const validAttendees = taskInfo.attendees.filter(attendee => {
                     return emailRegex.test(attendee.trim());
                 }).map(attendee => ({
                     email: attendee.trim()
-                })),
-            };
+                }));
+
+                if (validAttendees.length > 0) {
+                    event.attendees = validAttendees;
+                }
+            }
 
             // Add Google Meet if requested
             if (isGoogleMeetRequested) {
@@ -709,16 +739,21 @@ class GoogleManager {
                         }
                     }
                 };
-            }
-
-            logger.info('[GoogleManager] Creating calendar event with data:', {
+            } logger.info('[GoogleManager] Creating calendar event with data:', {
                 summary: event.summary,
                 start: event.start,
                 end: event.end,
                 calendarId: taskInfo.calendarId || 'primary',
                 hasGoogleMeet: isGoogleMeetRequested,
                 location: event.location,
-                attendeesCount: event.attendees?.length || 0
+                attendeesCount: event.attendees?.length || 0,
+                originalTaskInfo: {
+                    dueDate: taskInfo.dueDate,
+                    convertedDate: dueDate,
+                    dueTime: taskInfo.dueTime,
+                    startTime: startTime,
+                    endTime: endTime
+                }
             });
 
             const response = await this.calendar.events.insert({
@@ -734,33 +769,41 @@ class GoogleManager {
             });
 
             return { success: true, eventId: response.data.id };
-
         } catch (error: any) {
             logger.error('[GoogleManager] Error creating calendar event:', {
                 error: error.message,
                 code: error.code,
                 status: error.response?.status,
                 statusText: error.response?.statusText,
-                data: error.response?.data,
-                taskInfo: {
+                responseData: error.response?.data,
+                requestData: {
                     title: taskInfo.title,
                     dueDate: taskInfo.dueDate,
                     dueTime: taskInfo.dueTime,
                     startTime: taskInfo.startTime,
                     endTime: taskInfo.endTime,
-                    calendarId: taskInfo.calendarId
+                    calendarId: taskInfo.calendarId,
+                    hasAttendees: (taskInfo.attendees?.length || 0) > 0,
+                    hasLocation: !!taskInfo.location
+                },
+                errorDetails: {
+                    name: error.name,
+                    stack: error.stack
                 }
             });
 
-            // Handle specific error cases
+            // Handle specific error cases with detailed messages
             if (error.code === 401) {
-                return { success: false, error: 'Authentication failed - refresh token may be expired' };
+                return { success: false, error: 'Authentication failed - Google refresh token may be expired. Please reconnect your Google account.' };
             } else if (error.code === 403) {
-                return { success: false, error: 'Permission denied - check Google Calendar API scopes' };
+                return { success: false, error: 'Permission denied - Check Google Calendar API scopes and permissions.' };
             } else if (error.code === 400) {
-                return { success: false, error: `Invalid request: ${error.message}` };
+                const errorDetails = error.response?.data?.error?.message || error.message;
+                return { success: false, error: `Invalid request: ${errorDetails}` };
             } else if (error.code === 404) {
-                return { success: false, error: 'Calendar not found - check calendarId' };
+                return { success: false, error: `Calendar not found - Calendar ID "${taskInfo.calendarId || 'primary'}" does not exist.` };
+            } else if (error.code === 409) {
+                return { success: false, error: 'Event conflict - There may be a scheduling conflict.' };
             } else {
                 return { success: false, error: `Google Calendar API error: ${error.message}` };
             }
@@ -826,7 +869,8 @@ class GoogleManager {
             } else {
                 return { success: false, error: `Google Tasks API error: ${error.message}` };
             }
-        }    }/**
+        }
+    }/**
      * Tạo Task List mới trong Google Tasks
      */
     async createTaskList(title: string): Promise<{ success: boolean; taskListId?: string; error?: string }> {
