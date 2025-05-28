@@ -48,15 +48,19 @@ export async function handleTaskCreation(args: string, senderId: string) {
                     attendees: [...llmResult.attendees, ...llmResult.emails],
                     location: llmResult.location,
                     description: llmResult.description
-                };
+                };                // Determine task type using the updated categorization logic
+                taskType = categorizeTaskType(args);
 
-                // Determine task type based on LLM analysis
-                if (llmResult.attendees.length > 0 || llmResult.emails.length > 0 || llmResult.meetingType) {
+                // Override only for specific LLM-detected patterns - FIXED: More conservative
+                if (llmResult.meetingType === 'google_meet' ||
+                    (llmResult.title && /họp|meeting|cuộc họp|hội nghị|phỏng vấn/.test(llmResult.title.toLowerCase()))) {
                     taskType = 'meeting';
-                } else if (llmResult.date || llmResult.time) {
+                }
+                // REMOVED: Auto-upgrade to calendar - respect explicit "task" keyword
+                // Only upgrade to calendar if it's NOT explicitly a task and has strong calendar indicators
+                else if (taskType !== 'task' && (llmResult.date || llmResult.time) &&
+                    !args.toLowerCase().includes('task') && !args.toLowerCase().includes('tạo task')) {
                     taskType = 'calendar';
-                } else {
-                    taskType = 'task';
                 }
 
                 // Add Google Meet request if detected
@@ -168,7 +172,7 @@ export async function handleCalendarAndTaskListSelection(taskInfo: any, senderId
                     type: 'tasklist' as 'tasklist'
                 };
                 const enhancedOptions = [...taskListOptions, createNewOption];
-                
+
                 await selectionManager.promptSelection(senderId, enhancedOptions, 'tasklist', taskInfo);
                 return; // Wait for user selection
             } else if (taskListOptions.length === 1) {

@@ -423,9 +423,7 @@ export function formatDeletedTasksList(deletedTasks: any[]): string {
  * Smart task categorization for calendar vs meeting vs task - ENHANCED: Handle prefixes
  */
 export function categorizeTaskType(content: string): 'calendar' | 'meeting' | 'task' {
-    const content_lower = content.toLowerCase();
-
-    // Check for explicit prefixes first (highest priority)
+    const content_lower = content.toLowerCase();    // Check for explicit prefixes first (highest priority)
     if (/^\[meeting\]/i.test(content) || /^\[họp\]/i.test(content)) {
         return 'meeting';
     }
@@ -436,39 +434,43 @@ export function categorizeTaskType(content: string): 'calendar' | 'meeting' | 't
         return 'task';
     }
 
-    // Meeting keywords (interactions with people)
+    // FIXED: Respect explicit "task" keyword - highest priority
+    if (/(?:tạo|làm|create)\s+task/i.test(content) || /task\s*:/i.test(content)) {
+        return 'task';
+    }    // Meeting keywords (formal business meetings)
     const meetingKeywords = [
-        'họp', 'meeting', 'cuộc họp', 'gặp', 'gặp mặt',
-        'phỏng vấn', 'interview', 'tư vấn', 'thảo luận',
-        'gọi điện', 'call', 'zoom', 'teams', 'video call',
-        'với', 'cùng', // meeting with someone
+        'họp', 'meeting', 'cuộc họp', 'hội nghị', 'hội thảo',
+        'phỏng vấn', 'interview', 'tư vấn', 'thảo luận công việc',
+        'gọi điện công việc', 'call meeting', 'zoom meeting', 'teams meeting',
         'bàn bạc', 'thương lượng', 'negotiate',
-        'trình bày', 'thuyết trình', 'present', 'demo'
-    ];    // Calendar event keywords (scheduled events, appointments)
+        'họp team', 'họp dự án', 'meeting project'
+    ];
+
+    // Calendar event keywords (personal events, appointments, social meetings)
     const calendarKeywords = [
-        'hẹn', 'appointment', 'lịch hẹn',
+        'gặp', 'gặp mặt', 'hẹn', 'appointment', 'lịch hẹn',
         'sinh nhật', 'birthday', 'lễ', 'event', 'sự kiện',
         'khám bác sĩ', 'doctor', 'bác sĩ', 'bệnh viện',
         'deadline', 'hạn chót', 'due date',
         'đi', 'đến', 'tại', 'ở', // location-based events
         'lúc', 'vào', 'vào lúc', 'thời gian', // time-specific events
+        'với', 'cùng', // meeting with someone (personal)
         'reminder', 'nhắc nhở', 'nhắc',
-        'hội thảo', 'conference', 'seminar', 'workshop', // conferences and seminars
+        'conference', 'seminar', 'workshop', // conferences and seminars
         'khóa học', 'training', 'đào tạo', 'class', 'lớp học',
         'buổi', 'session', 'show', 'concert', 'biểu diễn'
     ];
 
-    // Task keywords (actions, work items)
+    // Task keywords (actions, work items) - FIXED: Move presentation keywords here
     const taskKeywords = [
         'làm', 'viết', 'tạo', 'hoàn thành', 'complete',
         'mua', 'buy', 'đọc', 'read', 'học', 'study',
         'kiểm tra', 'check', 'review', 'dọn dẹp',
         'chuẩn bị', 'prepare', 'nộp', 'submit',
         'gửi', 'send', 'email', 'báo cáo', 'report',
+        'trình bày', 'thuyết trình', 'present', 'demo', // MOVED: These are work tasks, not meetings
         'code', 'lập trình', 'debug', 'test', 'deploy'
-    ];
-
-    // Count matches
+    ];// Count matches
     const meetingMatches = meetingKeywords.filter(keyword =>
         content_lower.includes(keyword)
     ).length;
@@ -481,12 +483,34 @@ export function categorizeTaskType(content: string): 'calendar' | 'meeting' | 't
         content_lower.includes(keyword)
     ).length;
 
-    // Prioritize meeting if meeting keywords found
-    if (meetingMatches > 0 && meetingMatches >= calendarMatches && meetingMatches >= taskMatches) {
+    // Special logic: Personal meetings with specific time are calendar events
+    const hasPersonalMeeting = /gặp|gặp mặt/.test(content_lower);
+    const hasSpecificTime = /\d{1,2}h|\d{1,2}:\d{2}|\d{1,2}\s*giờ|lúc\s*\d+|vào\s*\d+/.test(content_lower);
+    const hasPersonNames = /anh|chị|ông|bà|ms\.|mr\./.test(content_lower);
+
+    if (hasPersonalMeeting && (hasSpecificTime || hasPersonNames)) {
+        return 'calendar';
+    }
+
+    // Formal meeting keywords take priority for business meetings
+    const formalMeetingKeywords = ['họp', 'meeting', 'cuộc họp', 'hội nghị', 'phỏng vấn'];
+    const hasFormalMeeting = formalMeetingKeywords.some(keyword => content_lower.includes(keyword));
+
+    if (hasFormalMeeting) {
         return 'meeting';
     }
 
-    // Then calendar events
+    // Calendar events with time/date take priority
+    if (calendarMatches > 0 && (hasSpecificTime || content_lower.includes('ngày') || content_lower.includes('thứ'))) {
+        return 'calendar';
+    }
+
+    // Remaining meeting keywords
+    if (meetingMatches > taskMatches) {
+        return 'meeting';
+    }
+
+    // Default logic based on keyword count
     if (calendarMatches > taskMatches) {
         return 'calendar';
     }
@@ -510,8 +534,34 @@ export interface ConflictResult {
 
 export function checkScheduleConflicts(dueDate: string, dueTime: string, endTime?: string): ConflictResult {
     try {
+        // Validate input parameters
+        if (!dueDate || !dueTime) {
+            logger.warn('[TaskOps] Invalid parameters for conflict check:', { dueDate, dueTime, endTime });
+            return { hasConflict: false };
+        }
+
+        // Validate date format
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+            logger.warn('[TaskOps] Invalid date format for conflict check:', dueDate);
+            return { hasConflict: false };
+        }
+
+        // Validate time format
+        if (!/^\d{2}:\d{2}$/.test(dueTime)) {
+            logger.warn('[TaskOps] Invalid time format for conflict check:', dueTime);
+            return { hasConflict: false };
+        }
+
         const newStartTime = parseTimeToMinutes(dueTime);
         const newEndTime = endTime ? parseTimeToMinutes(endTime) : newStartTime + 60; // Default 1 hour
+
+        logger.info('[TaskOps] Checking conflicts for:', {
+            dueDate,
+            dueTime,
+            endTime,
+            newStartTime,
+            newEndTime
+        });
 
         // Get all tasks/events for the same date
         const existingTasks = db.prepare(`
@@ -520,49 +570,109 @@ export function checkScheduleConflicts(dueDate: string, dueTime: string, endTime
             ORDER BY due_time
         `).all(dueDate);
 
+        logger.info('[TaskOps] Found existing tasks for conflict check:', {
+            date: dueDate,
+            taskCount: existingTasks.length,
+            tasks: existingTasks.map((t: any) => ({
+                id: t.id,
+                content: t.content,
+                due_time: t.due_time,
+                end_time: t.end_time
+            }))
+        });
+
         const conflicts: ConflictResult['conflicts'] = [];
         for (const task of existingTasks) {
-            const existingStartTime = parseTimeToMinutes((task as any).due_time);
-            const existingEndTime = (task as any).end_time ? parseTimeToMinutes((task as any).end_time) : existingStartTime + 60;
+            try {
+                const taskDueTime = (task as any).due_time;
+                const taskEndTime = (task as any).end_time;
 
-            // Check for overlap
-            const hasOverlap = (newStartTime < existingEndTime) && (newEndTime > existingStartTime);
+                // Skip if due_time is invalid
+                if (!taskDueTime || !/^\d{2}:\d{2}$/.test(taskDueTime)) {
+                    logger.warn('[TaskOps] Skipping task with invalid due_time:', {
+                        taskId: (task as any).id,
+                        due_time: taskDueTime
+                    });
+                    continue;
+                }
 
-            // Check if too close (within 60 minutes)
-            const timeDifference = Math.min(
-                Math.abs(newStartTime - existingEndTime),
-                Math.abs(existingStartTime - newEndTime)
-            );
+                const existingStartTime = parseTimeToMinutes(taskDueTime);
+                const existingEndTime = taskEndTime && /^\d{2}:\d{2}$/.test(taskEndTime) ?
+                    parseTimeToMinutes(taskEndTime) : existingStartTime + 60;
 
-            if (hasOverlap) {
-                conflicts.push({
-                    task,
-                    timeDifference: 0,
-                    conflictType: 'overlap'
+                // Check for overlap
+                const hasOverlap = (newStartTime < existingEndTime) && (newEndTime > existingStartTime);
+
+                // Check if too close (within 60 minutes)
+                const timeDifference = Math.min(
+                    Math.abs(newStartTime - existingEndTime),
+                    Math.abs(existingStartTime - newEndTime)
+                );
+
+                if (hasOverlap) {
+                    conflicts.push({
+                        task,
+                        timeDifference: 0,
+                        conflictType: 'overlap'
+                    });
+                    logger.info('[TaskOps] Found overlap conflict:', {
+                        newEvent: `${dueTime}-${endTime || 'auto'}`,
+                        existingTask: `${taskDueTime}-${taskEndTime || 'auto'}`,
+                        taskContent: (task as any).content
+                    });
+                } else if (timeDifference < 60) {
+                    conflicts.push({
+                        task,
+                        timeDifference,
+                        conflictType: 'too-close'
+                    });
+                    logger.info('[TaskOps] Found too-close conflict:', {
+                        newEvent: `${dueTime}-${endTime || 'auto'}`,
+                        existingTask: `${taskDueTime}-${taskEndTime || 'auto'}`,
+                        timeDifference,
+                        taskContent: (task as any).content
+                    });
+                }
+            } catch (taskError) {
+                logger.error('[TaskOps] Error processing task for conflict check:', {
+                    taskId: (task as any).id,
+                    error: taskError,
+                    taskData: task
                 });
-            } else if (timeDifference < 60) {
-                conflicts.push({
-                    task,
-                    timeDifference,
-                    conflictType: 'too-close'
-                });
+                // Continue with other tasks
             }
         }
 
         // Generate suggested times if conflicts exist
         let suggestedTimes: string[] = [];
         if (conflicts.length > 0) {
-            suggestedTimes = generateSuggestedTimes(dueDate, newEndTime - newStartTime, existingTasks);
+            try {
+                suggestedTimes = generateSuggestedTimes(dueDate, newEndTime - newStartTime, existingTasks);
+            } catch (suggestionError) {
+                logger.error('[TaskOps] Error generating suggested times:', suggestionError);
+            }
         }
 
-        return {
+        const result = {
             hasConflict: conflicts.length > 0,
             conflicts: conflicts.length > 0 ? conflicts : undefined,
             suggestedTimes: suggestedTimes.length > 0 ? suggestedTimes : undefined
         };
 
+        logger.info('[TaskOps] Conflict check result:', {
+            hasConflict: result.hasConflict,
+            conflictCount: conflicts.length,
+            suggestedTimesCount: suggestedTimes.length
+        });
+
+        return result;
+
     } catch (error) {
-        logger.error('[TaskOps] Error checking schedule conflicts:', error);
+        logger.error('[TaskOps] Error checking schedule conflicts:', {
+            error: error instanceof Error ? error.message : error,
+            stack: error instanceof Error ? error.stack : undefined,
+            input: { dueDate, dueTime, endTime }
+        });
         return { hasConflict: false };
     }
 }

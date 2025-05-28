@@ -168,8 +168,7 @@ class ConfidenceBasedParser {
         for (const pattern of this.highConfidencePatterns) {
             const match = message.match(pattern.pattern);
             if (match) {
-                const extracted = pattern.extractor(match) as any;
-                return {
+                const extracted = pattern.extractor(match) as any; return {
                     title: extracted.title || 'Task',
                     attendees: extracted.attendees || [],
                     emails: [],
@@ -178,7 +177,7 @@ class ConfidenceBasedParser {
                     time: extracted.time || '',
                     description: extracted.description || '',
                     meetingType: extracted.meetingType || 'google_meet',
-                    cmd: extracted.cmd || 'add',
+                    cmd: extracted.cmd, // FIXED: Don't default to 'add' - let natural language flow through
                     args: extracted.args || '',
                     isTask: extracted.isTask !== false, // Default to true unless explicitly false
                     confidence: pattern.confidence,

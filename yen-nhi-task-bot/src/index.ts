@@ -313,13 +313,34 @@ async function main() {    // Initialize Google Manager
                     return;
                 }
             } else {
-                // Use optimized result
-                enhancedCmd = {
-                    cmd: optimizationResult.result.cmd || 'add',
-                    args: optimizationResult.result.title || plainText,
-                    confidence: optimizationResult.confidence,
-                    reasoning: 'From optimization pipeline'
-                };
+                // Use optimized result - but only if it has a specific command
+                if (optimizationResult.result.cmd) {
+                    enhancedCmd = {
+                        cmd: optimizationResult.result.cmd,
+                        args: optimizationResult.result.args || optimizationResult.result.title || plainText,
+                        confidence: optimizationResult.confidence,
+                        reasoning: 'From optimization pipeline'
+                    };
+                } else {
+                    // No specific command from optimization - treat as natural language
+                    enhancedCmd = null;
+                }
+            }
+
+            // If no enhanced command was produced, check for natural language task
+            if (!enhancedCmd) {
+                // Not a command - check if it's a natural task request
+                logger.info(`[Zalo] No command detected, checking for conversational task: "${plainText}"`);
+
+                const handledConversation = await startConversationalTask(senderId, plainText);
+                if (handledConversation) {
+                    logger.info('[Conversation] Started conversational task creation');
+                    return;
+                }
+
+                // Truly just casual conversation
+                logger.info(`[Zalo] Casual conversation detected, not processing: "${plainText}"`);
+                return;
             }
 
             // Log parsing results

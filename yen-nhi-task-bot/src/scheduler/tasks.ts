@@ -97,18 +97,8 @@ export async function sendChecklist() {
             timeZone: 'Asia/Ho_Chi_Minh'
         }); let checklistMsg = `🌅 **CHECKLIST SÁNG - ${displayDate}**\n\n`;
 
-        // Add system info to checklist with fresh data verification
-        const displayLlmProvider = config.openaiBaseUrl?.includes('github') ? 'GitHub Models' : 'OpenAI';
-        const llmModelDisplay = config.useLLM ? `${config.openaiModelId} (${displayLlmProvider})` : 'Disabled';
-
-        checklistMsg += `🤖 **THÔNG TIN HỆ THỐNG:**\n`;
-        checklistMsg += `   💬 LLM Model: ${llmModelDisplay}\n`;
-        checklistMsg += `   🎙️ STT Model: ${config.huggingfaceWhisperModel}\n`;
-
-        // Verify fresh data flow
+        // Verify fresh data flow (keep for logging but don't show in message)
         const freshDataResults = await verifyFreshDataFlow();
-        const freshDataStatus = freshDataResults.googleCalendar.success && freshDataResults.googleTasks.success ? '✅' : '⚠️';
-        checklistMsg += `   🔄 Fresh Data: ${freshDataStatus} Google APIs (Cal: ${freshDataResults.googleCalendar.responseTime}ms, Tasks: ${freshDataResults.googleTasks.responseTime}ms)\n\n`;
 
         // 1. Lấy lịch làm việc từ Google Calendar
         let calendarEvents = [];
